@@ -102,6 +102,7 @@ crate build recipes, localized names). Full details with struct layouts and the
 engine functions that read them: **[docs/FORMATS.md](docs/FORMATS.md)**.
 
 ## Credits
+This project borns as a stress-test to check the new Anthropic Fable5 LLM model skills about security analysis and reverse engineering.
 
 Reverse engineering and tools by Mattia Del Franco, with AI assistance
 (Claude). Built with [mkpsxiso] by Lameguy64 and [Ghidra].
