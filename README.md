@@ -1,5 +1,7 @@
 # Team Buddies Level Editor
 
+OFFICIAL DISCORD SERVER: https://discord.gg/wfwM72u8E5
+
 A browser-based level editor and modding toolchain for **Team Buddies**
 (PSX, Psygnosis 2000, SCES-02986), built on a from-scratch reverse engineering
 of the game's data formats.
