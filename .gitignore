@@ -1,0 +1,15 @@
+# ---- game data: NEVER committed (copyrighted Psygnosis/Sony assets) ----
+teambudd/
+
+# ---- third-party tool, cloned and built locally by tools/setup.py ----
+mkpsxiso/
+
+# ---- Ghidra install and project (project contains imported game binaries) ----
+ghidra/ghidra_12.1.2_PUBLIC/
+ghidra/proj/
+
+# ---- local junk ----
+__pycache__/
+*.pyc
+.DS_Store
+.claude/

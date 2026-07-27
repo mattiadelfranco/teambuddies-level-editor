@@ -1,0 +1,69 @@
+=== 0x800e98e0 in FUN_800e98ac @ 800e98ac ===
+
+void FUN_800e98ac(int param_1)
+
+{
+  undefined4 uVar1;
+  int iVar2;
+  uint uVar3;
+  uint uVar4;
+  uint uVar5;
+  int iVar6;
+  int *piVar7;
+  uint uVar8;
+  short local_30;
+  undefined2 local_2e;
+  short local_2c;
+  
+  func_0x800a79f4((int)*(short *)(param_1 + 0xb8),(int)*(short *)(param_1 + 0xba),0);
+  func_0x800a79f4((int)((*(ushort *)(param_1 + 0xb8) + 0x100) * 0x10000) >> 0x10,
+                  (int)*(short *)(param_1 + 0xba),0);
+  func_0x800a79f4((int)*(short *)(param_1 + 0xb8),
+                  (int)((*(ushort *)(param_1 + 0xba) + 0x100) * 0x10000) >> 0x10,0);
+  func_0x800a79f4((int)((*(ushort *)(param_1 + 0xb8) + 0x100) * 0x10000) >> 0x10,
+                  (int)((*(ushort *)(param_1 + 0xba) + 0x100) * 0x10000) >> 0x10,0);
+  local_30 = *(short *)(param_1 + 0xb8) + 0x100;
+  local_2c = *(short *)(param_1 + 0xba) + 0x100;
+  local_2e = func_0x800ab6b0(&local_30);
+  uVar1 = func_0x800843e4();
+  func_0x80087178(uVar1,&local_30,0x4b0,0);
+  func_0x800ac1f0(&local_30,0x5f4,4000,0xfffffe70);
+  uVar5 = 0;
+  *(undefined4 *)(param_1 + 0x134) = 1;
+  *(undefined4 *)(param_1 + 0x138) = 0;
+  do {
+    uVar4 = 0;
+    do {
+      uVar8 = 0;
+      iVar2 = 0;
+      do {
+        piVar7 = (int *)(param_1 + 0xc0 + iVar2 + uVar4 * 0xc + uVar5 * 0x24);
+        iVar2 = *piVar7;
+        if (iVar2 != 0) {
+          if (*(short *)(iVar2 + 0xc0) == 0x15) {
+            uVar3 = func_0x800209dc();
+            iVar6 = *piVar7;
+            iVar2 = *(int *)(iVar6 + 4);
+            (**(code **)(iVar2 + 100))
+                      (iVar6 + *(short *)(iVar2 + 0x60),uVar3 & 0xfff,0x3c,0xffffff6a);
+          }
+          else {
+            *(uint *)(iVar2 + 0xb8) = *(uint *)(iVar2 + 0xb8) | 0x24;
+          }
+        }
+        uVar8 = uVar8 + 1 & 0xffff;
+        iVar2 = uVar8 << 2;
+      } while (uVar8 < 3);
+      uVar4 = uVar4 + 1 & 0xffff;
+    } while (uVar4 < 3);
+    uVar5 = uVar5 + 1 & 0xffff;
+  } while (uVar5 < 3);
+  func_0x80079cc0(*(undefined4 *)(param_1 + 0x144),0);
+  iVar2 = *(int *)(param_1 + 0x144);
+  *(undefined4 *)(iVar2 + 8) = 0;
+  *(undefined4 *)(iVar2 + 4) = 0;
+  return;
+}
+
+
+INFO  REPORT: Save succeeded for processed file: /GAME.BIN (HeadlessAnalyzer)  

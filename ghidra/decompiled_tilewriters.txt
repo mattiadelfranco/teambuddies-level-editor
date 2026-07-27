@@ -1,0 +1,193 @@
+=== 0x800ab008 in FUN_800aae94 @ 800aae94 ===
+
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+void FUN_800aae94(undefined4 param_1,short *param_2)
+
+{
+  undefined4 uVar1;
+  undefined4 uVar2;
+  undefined4 uVar3;
+  undefined4 uVar4;
+  undefined4 in_zero;
+  undefined4 in_at;
+  int iVar5;
+  int iVar6;
+  int iVar7;
+  int iVar8;
+  int iVar9;
+  int iVar10;
+  uint uVar11;
+  undefined4 local_68;
+  uint local_64;
+  undefined4 local_60;
+  undefined4 local_5c;
+  undefined4 local_58;
+  uint local_54;
+  undefined4 local_50;
+  undefined4 local_4c;
+  uint *local_48;
+  uint local_44;
+  int local_40;
+  int local_3c;
+  int local_38;
+  int local_34;
+  int local_30;
+  
+  local_68 = 0xf000;
+  local_64 = local_64 & 0xffff0000;
+  local_60 = 0;
+  local_5c = CONCAT22(local_5c._2_2_,0xf000);
+  local_58 = 0x1000;
+  local_54 = local_54 & 0xffff0000;
+  local_50 = 0;
+  local_4c = CONCAT22(local_4c._2_2_,0x1000);
+  setCopReg(2,0x3000,0x808080);
+  setCopControlWord(2,0x4000,DAT_800be7ac);
+  setCopControlWord(2,0x4800,DAT_800be7b0);
+  setCopControlWord(2,0x5000,DAT_800be7b4);
+  setCopControlWord(2,0x5800,DAT_800be7b8);
+  setCopControlWord(2,0x6000,DAT_800be7bc);
+  setCopReg(2,in_zero,0xf000);
+  setCopReg(2,in_at,local_64);
+  setCopReg(2,&local_58,0);
+  setCopReg(2,&local_60,local_5c);
+  setCopReg(2,&local_68,0x1000);
+  setCopReg(2,param_2,local_54);
+  copFunction(2,0x118043f);
+  uVar1 = getCopReg(2,0x14);
+  uVar2 = getCopReg(2,0x15);
+  uVar3 = getCopReg(2,0x16);
+  setCopReg(2,in_zero,0);
+  setCopReg(2,in_at,local_4c);
+  copFunction(2,0x108041b);
+  uVar4 = getCopReg(2,0x16);
+  setCopControlWord(2,0,_DAT_1f800384);
+  setCopControlWord(2,0x800,_DAT_1f800388);
+  setCopControlWord(2,0x1000,_DAT_1f80038c);
+  setCopControlWord(2,0x1800,_DAT_1f800390);
+  setCopControlWord(2,0x2000,_DAT_1f800394);
+  setCopControlWord(2,0x2800,_DAT_1f800398);
+  setCopControlWord(2,0x3000,_DAT_1f80039c);
+  setCopControlWord(2,0x3800,_DAT_1f8003a0);
+  local_3c = -0x4000;
+  local_34 = 1;
+  local_48 = (uint *)&DAT_1f8003f8;
+  local_30 = DAT_800bd8d8;
+  local_38 = DAT_800bd8e8;
+  do {
+    uVar11 = 1;
+    local_34 = local_34 + -1;
+    local_44 = *local_48;
+    local_48 = local_48 + 1;
+    local_40 = 3;
+    iVar9 = local_3c;
+    do {
+      iVar10 = 7;
+      iVar7 = -0x4000;
+      local_3c = iVar9 + 0x1000;
+      local_40 = local_40 + -1;
+      iVar6 = local_30;
+      iVar8 = local_38;
+      local_38 = local_38 + 0x2000;
+      local_30 = local_30 + 0x1040;
+      do {
+        if ((local_44 & uVar11) != 0) {
+          FUN_800b1f84(iVar7,iVar9,iVar8,iVar6);
+          if (iVar7 == DAT_800c04fc) {
+            FUN_800aa5d0(iVar6,0x41,iVar7,iVar9,0,0x200,uVar1,*param_2 < iVar7);
+          }
+          iVar5 = (int)DAT_800c0510;
+          if (iVar7 == iVar5 + -0x1000) {
+            FUN_800aa5d0(iVar6 + 0x40,0x41,iVar5,iVar9,0,0x200,uVar3,iVar5 < *param_2);
+          }
+          if (iVar9 == DAT_800c0504) {
+            FUN_800aa5d0(iVar6,1,iVar7,iVar9,0x200,0,uVar2,param_2[2] < iVar9);
+          }
+          iVar5 = (int)DAT_800c0518;
+          if (iVar9 == iVar5 + -0x1000) {
+            FUN_800aa5d0(iVar6 + 0x1040,1,iVar7,iVar5,0x200,0,uVar4,iVar5 < param_2[2]);
+          }
+        }
+        iVar8 = iVar8 + 0x80;
+        iVar7 = iVar7 + 0x1000;
+        iVar10 = iVar10 + -1;
+        uVar11 = uVar11 << 1;
+        iVar6 = iVar6 + 0x40;
+      } while (iVar10 != -1);
+      iVar9 = local_3c;
+    } while (local_40 != -1);
+  } while (local_34 != -1);
+  return;
+}
+
+
+=== 0x800ab714 in FUN_800ab6b0 @ 800ab6b0 ===
+
+/* WARNING: Removing unreachable block (ram,0x800ab6dc) */
+/* WARNING: Removing unreachable block (ram,0x800ab6ec) */
+
+int FUN_800ab6b0(ushort *param_1)
+
+{
+  ushort uVar1;
+  short sVar2;
+  int iVar3;
+  short *psVar4;
+  int iVar5;
+  int iVar6;
+  uint uVar7;
+  int iVar8;
+  int iVar9;
+  uint uVar10;
+  uint uVar11;
+  
+  uVar10 = *param_1 + 0x4000 & 0x1ff;
+  uVar11 = param_1[2] + 0x4000 & 0x1ff;
+  uVar7 = (*param_1 + 0x4000 & 0xfe00) >> 9;
+  iVar3 = (int)(param_1[2] + 0x4000 & 0xfe00) >> 9;
+  uVar1 = *(ushort *)((iVar3 * 0x40 + uVar7) * 0x10 + DAT_800bd8e8 + 10);
+  psVar4 = (short *)((uVar7 + iVar3 * 0x41) * 8 + DAT_800bd8d8);
+  iVar8 = (int)*psVar4;
+  iVar6 = (int)psVar4[4];
+  iVar3 = (int)psVar4[0x104];
+  iVar9 = (int)psVar4[0x108];
+  if ((uVar1 & 1) == 0) {
+    iVar3 = (iVar6 - iVar8) * uVar10 + (iVar3 - iVar8) * uVar11;
+    if (iVar3 < 0) {
+      iVar3 = iVar3 + 0x1ff;
+    }
+    return (iVar8 + (iVar3 >> 9)) * 0x10000 >> 0x10;
+  }
+  if ((uVar1 & 2) == 0) {
+    iVar5 = iVar6 - iVar8;
+    if (uVar10 <= uVar11) {
+      iVar5 = iVar9 - iVar3;
+      goto LAB_800ab764;
+    }
+    iVar3 = iVar9 - iVar6;
+  }
+  else {
+    if (0x1ff < uVar10 + uVar11) {
+      iVar3 = (iVar9 - iVar3) * uVar10 + (iVar9 - iVar6) * uVar11;
+      if (iVar3 < 0) {
+        iVar3 = iVar3 + 0x1ff;
+      }
+      sVar2 = ((psVar4[0x104] + psVar4[4]) - psVar4[0x108]) + (short)(iVar3 >> 9);
+      goto LAB_800ab794;
+    }
+    iVar5 = iVar6 - iVar8;
+LAB_800ab764:
+    iVar3 = iVar3 - iVar8;
+  }
+  iVar3 = iVar5 * uVar10 + iVar3 * uVar11;
+  if (iVar3 < 0) {
+    iVar3 = iVar3 + 0x1ff;
+  }
+  sVar2 = *psVar4 + (short)(iVar3 >> 9);
+LAB_800ab794:
+  return (int)sVar2;
+}
+
+
+INFO  REPORT: Save succeeded for processed file: /ENG.BIN (HeadlessAnalyzer)  

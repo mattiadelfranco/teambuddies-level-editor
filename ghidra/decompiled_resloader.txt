@@ -1,0 +1,21 @@
+=== 0x80074584 in FUN_80074584 @ 80074584 ===
+
+int FUN_80074584(int param_1,int param_2)
+
+{
+  uint uVar1;
+  int iVar2;
+  
+  uVar1 = DAT_800be81c;
+  do {
+    uVar1 = uVar1 - 1;
+    if (uVar1 == 0xffffffff) {
+      return 0;
+    }
+    iVar2 = FUN_8007409c(uVar1 & 0xffff);
+  } while ((*(int *)(iVar2 + 4) != param_1) || (*(int *)(iVar2 + 8) != param_2));
+  return iVar2;
+}
+
+
+INFO  REPORT: Save succeeded for processed file: /ENG.BIN (HeadlessAnalyzer)  

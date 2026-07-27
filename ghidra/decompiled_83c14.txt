@@ -1,0 +1,13 @@
+=== 0x80083c14 in FUN_80083c14 @ 80083c14 ===
+
+void FUN_80083c14(void)
+
+{
+  FUN_80083818();
+  DAT_800bfef8 = 0;
+  DAT_800bc23c = 0;
+  return;
+}
+
+
+INFO  REPORT: Save succeeded for processed file: /ENG.BIN (HeadlessAnalyzer)  
