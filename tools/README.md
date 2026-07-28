@@ -30,6 +30,26 @@ edits:
 - `POST /api/build` — applies the ENG.BIN team patch, repacks every modded level
   into a fresh copy of the vanilla `BUDDIES.DAT` and rebuilds the ISO
   (`teambudd/rebuild.bin` / `rebuild.cue`, ready for an emulator)
+- `GET /api/3d/<entry>` — meshes + textures for the editor's 3D view (parsed
+  from the level's `MDL.BND`/`TIM.BND` via `tb_lod.py`, cached in memory)
+- `GET /ground3d/<entry>.png` — 32 px/tile terrain render (2048×2048, cached in
+  `teambudd/grounds3d/`, invalidated by the PND mtime)
+
+The editor has a **3D view** ("🧊 vista 3D"): real level geometry (heightmap
+terrain + textured LOD models), orbit camera, and exact world-coordinate
+picking — click on the ground to copy precise tile coordinates, drag markers
+to move pads/units/turrets/objects with no calibration offsets.
+
+## tb_lod.py — parse .LOD models
+
+```
+python3 tools/tb_lod.py teambudd/dat_estratto/bind/0512/MDL.BND                   # list models
+python3 tools/tb_lod.py teambudd/dat_estratto/bind/0512/MDL.BND BSE_WOODS.LOD out.obj
+```
+
+Parser for the reverse-engineered `.LOD` model format (see FORMATS.md): 15-slot
+vertex-cache stream, tri/quad primitives with UVs, per-part TIM texture. Can
+export Wavefront OBJ for inspection. Also decodes TIMs (`tim_to_png`).
 
 ## tb_extract.py — unpack BUDDIES.DAT
 

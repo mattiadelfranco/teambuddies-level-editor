@@ -168,6 +168,10 @@ half-tile anchor + the game's isometric rendering).
 - **Tiles**: 64×64 records of 28 bytes:
   `[u16 atlas U (0–1023)][u8 V][4× s8 corner deltas in {0,±63} = 8 orientations]
   [u8 clut] + 16 bytes vertex colors (RGBA×4) + u32 flag`.
+  ⚠️ The UV base corner is the **south** vertex of the quad, not the north one:
+  after applying the delta-derived affine you must flip the sampled cell
+  vertically or every sprite renders mirrored (absolute proof: the pads'
+  painted arrows must all point toward the pad center).
   ⚠️ The engine reserves **32 bytes per tile** in memory (28 used → 16 KB of
   padding), so the animation queue starts at `tiles_start + 64*64*32 = +131072`,
   not right after the file records.
@@ -177,9 +181,79 @@ half-tile anchor + the game's isometric rendering).
   (`z*64 + x`). The animated pad arrows are 4 descriptors over the pad's center;
   moving a pad remaps them (`editor_server._repaint_pad`).
 
-Because the intermediate section is variable, `render_ground.py` locates the tile
-array by scanning for a run of valid records (U%64∈{0,63}, V%64∈{0,63},
-deltas∈{0,±63}, clut<120) — robust across all 45 levels.
+The tile array starts at an **exact, fully sequential offset** — there is no
+mystery gap:
+
+```
+off_extra = 12 + n_names*32 + n_inst*20
+tiles     = off_extra + 2 + extra_cnt*20 + 65*65*2
+```
+
+(Historical note: an earlier heuristic located the array by scanning for a run
+of valid-looking records; the tail of the heightmap usually passes that test,
+so it locked on ~2 records early — shifting the whole map by 2 tiles and
+wrapping the rightmost columns to the left edge one row down. Don't do that.)
+Note the clut index goes well past 120 on the biggest levels (COUNTRYVILE uses
+138 CLUTs).
+
+---
+
+## LOD — 3D models (MDL.BND)
+
+Each level's `MDL.BND` is a BIND of `*.LOD` model files (validated on all 121
+unique models across the 45 levels; parser in `tools/tb_lod.py`):
+
+```
+file:   char name[32]   u32 (0x80000000 | n_lod)   lod_block × n_lod
+lod:    u32 0x28   u16 959 (version)   u16 n_parts   char name[32]   part × n_parts
+part:   u32 0x48   header[72]   geometry[gsz]
+header: u32 0x7fc0   u32 ?   u32 RGB base color (0x7f7f7f = neutral)
+        bbox min/max as 2×(3×s16 + pad)   char tex_name[8] ("no_tex!" = none)
+        char bound_name[28]   u32 0   u32 gsz
+```
+
+Bytes after the first NUL of every name field are exporter garbage (stale heap),
+not zeroes. `tex_name` refers to a TIM inside the level's `TIM.BND` (matched
+case-insensitively, `.TIM` appended). A `.LOD` may hold up to 3 levels of
+detail; the richest one (most vertices) is the display model.
+
+**Geometry** is a stream of `u32` tags `[u16 code][u16 aux]`, `0x00000000`
+terminated, driving a **15-slot vertex register file** (a GTE-friendly
+vertex cache):
+
+- `code` packs three fields: `f0 = (code>>10)/4 − 1`, `f1 = ((code>>5)&31)/2 − 1`,
+  `f2 = (code&31) − 1`.
+- `aux` bit15 = 0 → **vertex load**: 36 bytes follow = 3 vertices + 3 normals,
+  stored into slots `f2, f1, f0` (in that order). The 18 s16 payload layout is
+  scrambled: `[a0 b0 a1 b1 a2 b2 c1 c2][n1c n2c][n0a n0b n1a n1b n2a n2b][c0 n0c]`
+  where vertex k = `(ak, bk, ck)` with normal `(nka, nkb, nkc)`, |n| ≈ 4096.
+  A load tag is *not* a face.
+- `aux` bit15 = 1 → **primitive**: `v0 = f0`, `v2 = f1`, `v3 = f2` (slot
+  indices); `v1 = ((aux&0xff)>>2) − 1`, negative → triangle `(v0,v2,v3)`,
+  else quad `(v0,v1,v2,v3)` in **perimeter order** (triangulate as a fan
+  `(v0,v1,v2)+(v0,v2,v3)`, *not* as a PSX strip).
+- `aux` bit14 = 1 → 8 bytes of UVs follow (4 × u8 pairs in vertex order,
+  pixel coordinates into the part's TIM; triangles use 3 + padding).
+
+Model axes: `a` = vertical (positive up), `b`/`c` horizontal; 1 tile = 512
+model units (= 64 × the 0–512 world-data unit). Untextured parts use the header
+RGB as flat color; TIM color 0 is transparent (alpha-tested foliage).
+
+**Coordinate frames** (anchored to the tile/heightmap grid, which is the same
+frame as PLD s0 — verified in game via the pads' painted tiles):
+
+| entity                | tile-frame position                  |
+|-----------------------|--------------------------------------|
+| PLD s0 / s6 / s3      | direct (`tile = 32 + s16(raw)/512`)  |
+| tile array, heightmap | row = z, col = x                     |
+| PND instances         | `((512 − x)/8, z/8)` — **x mirrored**|
+| PND extra list        | `(x/8, 64 − z/8)` — **z mirrored**   |
+
+Distances are invariant under global mirroring, so proximity-based analyses
+(base claiming etc.) cannot distinguish these frames — only absolute anchors
+like the painted pad tiles can. Instance yaw comes from `r1`
+(`0x1000<<16` = full turn; in the mirrored frame the spin direction inverts
+and the mesh must be x-mirrored too).
 
 ---
 

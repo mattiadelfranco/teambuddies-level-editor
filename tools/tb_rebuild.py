@@ -105,10 +105,14 @@ def main():
     mods = sorted(glob.glob(os.path.join(mods_dir, "*"))) if os.path.isdir(mods_dir) else []
     for mod in mods:
         name = os.path.basename(mod)
-        if not (os.path.isdir(mod) and name.isdigit()):
+        if os.path.isdir(mod) and name.isdigit():
+            i = int(name)
+            blob = pack_bind_from_folder(mod, inner[i])
+        elif os.path.isfile(mod) and name.endswith(".bin") and name[:-4].isdigit():
+            i = int(name[:-4])          # entry RAW (non-BIND), es. mods/0956.bin
+            blob = open(mod, "rb").read()
+        else:
             continue
-        i = int(name)
-        blob = pack_bind_from_folder(mod, inner[i])
         new_real[i] = len(blob)
         if slot.get(i) and len(blob) <= slot[i]:
             out.seek(entries[i][1] * SECTOR)

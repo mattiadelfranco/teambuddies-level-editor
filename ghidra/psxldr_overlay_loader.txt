@@ -1,0 +1,49 @@
+void FUN_8001a3f4(int param_1)
+
+{
+  int iVar1;
+  CdlFILE *pCVar2;
+  CdlFILE CStack_20;
+  
+  iVar1 = param_1 * 0x30;
+  pCVar2 = CdSearchFile(&CStack_20,(char *)(&DAT_80010004 + param_1 * 0xc));
+  if (pCVar2 != (CdlFILE *)0x0) {
+    FUN_8001aadc(&CStack_20,*(undefined4 *)(&DAT_80010024 + iVar1),
+                 *(undefined4 *)(&DAT_80010028 + iVar1));
+    do {
+    } while ((DAT_80010218 & 1) != 0);
+    __sn_cpp_structors(*(undefined4 *)(&DAT_8001002c + iVar1),*(undefined4 *)(&DAT_80010030 + iVar1)
+                      );
+  }
+  return;
+}
+
+ (GhidraScript)  
+void FUN_8001a474(char *param_1)
+
+{
+  CdlFILE *pCVar1;
+  CdlFILE CStack_20;
+  
+  pCVar1 = CdSearchFile(&CStack_20,param_1);
+  if (pCVar1 != (CdlFILE *)0x0) {
+    FUN_8001aadc(&CStack_20,&DAT_80010004,0x200);
+    do {
+    } while ((DAT_80010218 & 1) != 0);
+  }
+  return;
+}
+
+ (GhidraScript)  
+void FUN_8001abdc(uint param_1)
+
+{
+  int iVar1;
+  
+  iVar1 = DAT_80031170;
+  DAT_80031170 = param_1 & 0xffffff;
+  DAT_80031174 = (DAT_80031174 + iVar1) - (param_1 & 0xffffff);
+  return;
+}
+
+ (GhidraScript)  

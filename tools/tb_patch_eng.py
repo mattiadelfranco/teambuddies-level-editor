@@ -14,6 +14,18 @@ Due riscritture in-place (niente code cave, si assorbono i nop di load-delay):
   A) parser PND (0x800a835c-0x800a83bc): rot runtime = (-rot & 0xfff) | (f8<<12)
   B) FUN_800a8780 (0x800a8830-0x800a8908): se rot>>12 != 0 -> team forzato,
      altrimenti scansione originale; rot sempre mascherata a 0xfff.
+  D) Limite buddies per team 4 -> MAX_BUDDIES (default 5, max 6: il pool
+     membri del team struct ha 6 slot nativi, +0x38..+0x4f, init a capienza 6
+     in FUN_80078a94). Si alzano le 8 guardie "count > 3" (slti r,count,4):
+     3 in ENG (0x800738f0 = costruzione alla pedana, 0x800924b8/0x800927ec =
+     AI raccolta casse) e 5 in GAME.BIN (0x800ecbcc gate pedana,
+     0x800eebd4/eec18/eed48/eed8c spawner missione) -> patch anche GAME.BIN
+     (backup GAME.BIN.orig). NB HUD mostra 4 icone: il 5o buddy non ha icona.
+  C) FUN_8007075c (0x8007082c): rimozione del tetto d8cc sul numero di team
+     (bne del min() -> nop): le squadre = SEMPRE il count della config 0956
+     (clampato al count s0 della mappa). Serve per >4 team; effetto collaterale
+     possibile in multiplayer (il numero squadre scelto dal menu non limita
+     piu'). Revert con --revert.
 
 Uso:  python3 tools/tb_patch_eng.py [--revert]
 Backup automatico in ENG.BIN.orig. Idempotente.
@@ -23,6 +35,11 @@ import struct, sys, os, shutil
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENG = os.path.join(ROOT, "teambudd/estratto/ENG.BIN")
 BASE = 0x80051954
+GAME = os.path.join(ROOT, "teambudd/estratto/GAME.BIN")
+GAME_BASE = 0x800c4240
+MAX_BUDDIES = 5   # 1-6 (limite fisico: 6 slot nel team struct)
+BUDDY_CAP_ENG = [0x800738f0, 0x800924b8, 0x800927ec]
+BUDDY_CAP_GAME = [0x800ecbcc, 0x800eebd4, 0x800eec18, 0x800eed48, 0x800eed8c]
 
 # --- mini assembler MIPS (solo il necessario) ---
 R = {"zero": 0, "at": 1, "v0": 2, "v1": 3, "a0": 4, "a1": 5, "a2": 6, "a3": 7,
@@ -152,7 +169,19 @@ def build_patches(d_orig):
         o(0x800a8908),
     ]
     assert len(wA) == 25 and len(wB) == 55, (len(wA), len(wB))
-    return [(A, wA), (B, wB)]
+
+    # --- finestra C: FUN_8007075c, min(d8cc, count956) -> count956 ---
+    # 0x8007082c: bne a0,zero,+4 (se d8cc<count salta il ricarico del count)
+    C = 0x8007082c
+    assert o(C) == 0x14800004, f"layout inatteso al cap team: {o(C):#x}"
+    wC = [NOP]
+    out = [(A, wA), (B, wB), (C, wC)]
+    # --- D: limite buddies (slti r,count,4 -> MAX_BUDDIES) ---
+    for a in BUDDY_CAP_ENG:
+        w = o(a)
+        assert (w >> 26) in (0x0a, 0x0b) and (w & 0xffff) == 4, f"guardia buddies inattesa a {a:#x}: {w:#x}"
+        out.append((a, [(w & 0xffff0000) | MAX_BUDDIES]))
+    return out
 
 
 # sentinelle dei byte vanilla per riconoscere lo stato del file
@@ -160,12 +189,40 @@ VANILLA_CHECK = [
     (0x800a8360, 0x00000000),  # nop nel parser
     (0x800a8838, 0x38420800),  # xori v0,v0,0x800 in FUN_800a8780
 ]
-PATCH_CHECK = [(0x800a8360, LHU("at", 0x10, "s2"))]
+PATCH_CHECK = [(0x800a8360, LHU("at", 0x10, "s2")), (0x8007082c, NOP)]
+def _buddies_patched(d):
+    return (struct.unpack_from("<I", d, 0x800738f0 - BASE)[0] & 0xffff) == MAX_BUDDIES
+
+
+def patch_game():
+    """Alza le guardie buddies anche in GAME.BIN (stessa logica: da .orig)."""
+    d = bytearray(open(GAME, "rb").read())
+
+    def w_at(buf, ram):
+        return struct.unpack_from("<I", buf, ram - GAME_BASE)[0]
+
+    cur = w_at(d, BUDDY_CAP_GAME[0]) & 0xffff
+    if cur == MAX_BUDDIES:
+        print("GAME.BIN già patchato: ok")
+        return
+    if os.path.exists(GAME + ".orig"):
+        d = bytearray(open(GAME + ".orig", "rb").read())
+    elif cur != 4:
+        print("ERRORE: GAME.BIN in stato sconosciuto e manca .orig")
+        sys.exit(1)
+    else:
+        shutil.copy2(GAME, GAME + ".orig")
+    for a in BUDDY_CAP_GAME:
+        w = w_at(d, a)
+        assert (w >> 26) in (0x0a, 0x0b) and (w & 0xffff) == 4, f"guardia GAME inattesa a {a:#x}: {w:#x}"
+        struct.pack_into("<I", d, a - GAME_BASE, (w & 0xffff0000) | MAX_BUDDIES)
+    open(GAME, "wb").write(d)
+    print(f"GAME.BIN patchato (buddies per team: {MAX_BUDDIES})")
 
 
 def state(d):
     ok_v = all(struct.unpack_from("<I", d, a - BASE)[0] == w for a, w in VANILLA_CHECK)
-    ok_p = all(struct.unpack_from("<I", d, a - BASE)[0] == w for a, w in PATCH_CHECK)
+    ok_p = all(struct.unpack_from("<I", d, a - BASE)[0] == w for a, w in PATCH_CHECK) and _buddies_patched(d)
     return "vanilla" if ok_v else ("patched" if ok_p else "sconosciuto")
 
 
@@ -179,23 +236,36 @@ def main():
             print("ENG.BIN ripristinato da .orig")
         else:
             print("nessun backup .orig: niente da fare" if st == "vanilla" else "ERRORE: manca .orig!")
+        if os.path.exists(GAME + ".orig"):
+            shutil.copy2(GAME + ".orig", GAME)
+            print("GAME.BIN ripristinato da .orig")
         return
     if st == "patched":
         print("ENG.BIN già patchato: ok")
+        patch_game()
         return
-    if st != "vanilla":
-        print("ERRORE: ENG.BIN in stato sconosciuto, non tocco nulla")
-        sys.exit(1)
-    if not os.path.exists(ENG + ".orig"):
+    # riparte sempre dal vanilla: da .orig se esiste (anche se lo stato attuale
+    # e' una versione patch precedente), altrimenti dal file corrente
+    if os.path.exists(ENG + ".orig"):
+        d_orig = open(ENG + ".orig", "rb").read()
+        if state(bytearray(d_orig)) != "vanilla":
+            print("ERRORE: .orig non vanilla?!")
+            sys.exit(1)
+    elif st == "vanilla":
         shutil.copy2(ENG, ENG + ".orig")
-    d_orig = bytes(d)
+        d_orig = bytes(d)
+    else:
+        print("ERRORE: ENG.BIN in stato sconosciuto e manca .orig")
+        sys.exit(1)
+    d = bytearray(d_orig)
     # verifica di sanità: le word 'originali' riusate devono esistere dove previsto
     assert orig(d_orig, 0x800a835c) == 0x86420008, "layout inatteso (lh v0,0x8(s2))"
     assert orig(d_orig, 0x800a88d8) == 0x254a0001, "layout inatteso (addiu t2,t2,1)"
     for start, ws in build_patches(d_orig):
         struct.pack_into(f"<{len(ws)}I", d, start - BASE, *ws)
     open(ENG, "wb").write(d)
-    print(f"ENG.BIN patchato (campo team f8 per la lista extra): {len(d)} byte")
+    print(f"ENG.BIN patchato (team f8 lista extra + no-tetto team + buddies {MAX_BUDDIES})")
+    patch_game()
 
 
 if __name__ == "__main__":

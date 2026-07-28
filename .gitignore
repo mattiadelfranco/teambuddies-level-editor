@@ -7,6 +7,8 @@ mkpsxiso/
 # ---- Ghidra install and project (project contains imported game binaries) ----
 ghidra/ghidra_12.1.2_PUBLIC/
 ghidra/proj/
+ghidra/proj_psxldr/
+ghidra/psx_ldr.zip
 
 # ---- local junk ----
 __pycache__/

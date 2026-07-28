@@ -39,24 +39,58 @@ def load_tim(path):
 def load_tiles(pnd_path):
     d = open(pnd_path, "rb").read()
     n_names, n_inst, _, _ = struct.unpack_from("<4H", d, 4)
-    # array tile: sempre record da 28 byte subito dopo la heightmap;
-    # l'allineamento iniziale varia (0/2/4 byte) -> auto-rilevamento
-    base = 12 + n_names * 32 + n_inst * 20 + 65 * 65 * 2
+
     def rec_ok(p):
+        if p + 28 > len(d):
+            return False
         u, = struct.unpack_from("<H", d, p)
         v = d[p + 2]
         deltas = struct.unpack_from("<4b", d, p + 3)
         clut = d[p + 7]
+        # NB niente tetto stretto sulla clut: i livelli grandi (COUNTRYVILE,
+        # BOSSANOVA...) arrivano a ~140 - il vecchio limite 120 lasciava
+        # buchi neri; il range vero viene controllato in render() sul TIM
         return (u < 4096 and (u % 64) in (0, 63) and (v % 64) in (0, 63)
-                and all(x in (0, 63, -63) for x in deltas) and clut < 120)
-    # tra heightmap e tile c'e' una sezione variabile (multipli di 20 byte):
-    # trova l'inizio dell'array cercando una run di record validi
+                and all(x in (0, 63, -63) for x in deltas) and clut < 250)
+
+    # POSIZIONE ESATTA (layout sequenziale del parser del motore, lo stesso
+    # usato da editor_server._tiles_layout, verificato in gioco con le
+    # pedane): nomi, istanze, [u16 count lista extra + count*20B],
+    # heightmap 65x65 s16, poi l'array tile.
+    # Il vecchio auto-rilevamento a run di record validi partiva quasi
+    # sempre 2 record in anticipo (la coda della heightmap valida per caso):
+    # mappa slittata di 2 tile con le colonne di destra "wrappate" a
+    # sinistra una riga sotto.
+    off_extra = 12 + n_names * 32 + n_inst * 20
+    extra_cnt, = struct.unpack_from("<H", d, off_extra)
     o = None
-    for cand in range(base - 512, base + 8000):
-        good = sum(1 for k in range(20) if rec_ok(cand + k * 28))
-        if good >= 18:
+    if extra_cnt < 2000:
+        cand = off_extra + 2 + extra_cnt * 20 + 65 * 65 * 2
+        if sum(1 for k in range(20) if rec_ok(cand + k * 28)) >= 16:
             o = cand
-            break
+    if o is None:
+        # fallback: run di record validi + coda animazioni sana a +131072
+        def anim_ok(p):
+            a = p + 131072
+            if a + 2 > len(d):
+                return False
+            n1, = struct.unpack_from("<h", d, a)
+            if not 0 <= n1 < 2000:
+                return False
+            o2 = a + 2 + n1 * 12
+            if o2 + 2 > len(d):
+                return False
+            n2, = struct.unpack_from("<H", d, o2)
+            if n2 > 2000 or o2 + 2 + n2 * 16 > len(d) + 4:
+                return False
+            return all(struct.unpack_from("<H", d, o2 + 2 + i * 16)[0] < 4096
+                       for i in range(min(n2, 8)))
+        base = 12 + n_names * 32 + n_inst * 20 + 65 * 65 * 2
+        for cand in range(base - 512, base + 12000):
+            if (sum(1 for k in range(20) if rec_ok(cand + k * 28)) >= 18
+                    and anim_ok(cand)):
+                o = cand
+                break
     if o is None:
         raise ValueError("array tile non trovato")
     tiles = []
@@ -90,7 +124,11 @@ def orient_block(block, u_edge, v_edge, deltas):
     sv = v0 + (xs * dv1 + ys * dv2) / 63.0
     su = np.clip(np.rint(su), 0, 63).astype(np.int32)
     sv = np.clip(np.rint(sv), 0, 63).astype(np.int32)
-    return block[sv, su]
+    # l'angolo UV base e' il vertice a SUD, non a nord: senza questo flip ogni
+    # sprite risulta specchiato (segnalato dall'utente sul gioco reale).
+    # Prova assoluta: le frecce delle pedane devono puntare TUTTE verso il
+    # centro pedana — col flip verticale tornano coerenti.
+    return block[sv, su][::-1, :]
 
 
 def render(folder, out, px=16):
