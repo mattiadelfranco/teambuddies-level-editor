@@ -32,11 +32,13 @@ export const T = {
   canvas: null,         // shared ground canvas (native atlas res: 64 px/tile)
   cellClut: null,       // per-cell most common clut in this level
   stamp: { cell: 0, clut: 0, autoClut: true, orient: 0 },
-  mode: 'paint',        // paint | fill | clone | pick
+  mode: 'paint',        // paint | fill | clone | pick | copy | paste
   size: 1,              // paint brush size (tiles)
   cloneSrc: null,       // [tx,tz] clone source anchor
   cloneDelta: null,     // stamp offset while clone-painting
   onPatch: null,        // callback(tileIdx) after a tile is painted
+  clip: null,           // region clipboard {w, h, recs, hm} — survives level switches
+  rel: true,            // paste heights relative to the target terrain
 };
 
 const cellCache = new Map();
@@ -213,4 +215,56 @@ export function fillRect(tx0, tz0, tx1, tz1) {
 export function repaintAll() {
   if (!T.atlas || !T.canvas) return;
   for (let i = 0; i < 4096; i++) patchCanvas(i);
+}
+
+// ---- region copy/paste (tiles + heights, works across levels) ----
+export function copyRegion(tx0, tz0, tx1, tz1) {
+  const x0 = Math.max(0, Math.min(Math.floor(tx0), Math.floor(tx1)));
+  const x1 = Math.min(63, Math.max(Math.floor(tx0), Math.floor(tx1)));
+  const z0 = Math.max(0, Math.min(Math.floor(tz0), Math.floor(tz1)));
+  const z1 = Math.min(63, Math.max(Math.floor(tz0), Math.floor(tz1)));
+  const w = x1 - x0 + 1, h = z1 - z0 + 1;
+  const tl = store.ed.tiles, hm = store.ed.hm;
+  const recs = new Uint8Array(w * h * 28);
+  for (let z = 0; z < h; z++) for (let x = 0; x < w; x++)
+    recs.set(tl.subarray(((z0 + z) * 64 + x0 + x) * 28, ((z0 + z) * 64 + x0 + x) * 28 + 28),
+             (z * w + x) * 28);
+  const ch = new Int16Array((w + 1) * (h + 1));
+  for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++)
+    ch[z * (w + 1) + x] = hm[(z0 + z) * 65 + x0 + x];
+  T.clip = { w, h, recs, hm: ch, from: store.entry };
+  store.say(`⛶ copied ${w}×${h} tiles (+heights) — switch to Paste and click the target (any level).`);
+}
+
+export function pasteRegion(tx, tz) {
+  const c = T.clip;
+  if (!c) { store.say('clipboard empty — use Copy first.'); return; }
+  const x0 = Math.max(0, Math.min(64 - c.w, Math.round(tx - c.w / 2)));
+  const z0 = Math.max(0, Math.min(64 - c.h, Math.round(tz - c.h / 2)));
+  const tl = store.ed.tiles, hm = store.ed.hm;
+  let delta = 0;
+  if (T.rel) {
+    let mn = 32767;
+    for (const v of c.hm) if (v < mn) mn = v;
+    const target = hm[Math.min(64, z0 + (c.h >> 1)) * 65 + Math.min(64, x0 + (c.w >> 1))];
+    delta = Math.round((target - mn) / 4) * 4;
+  }
+  store.beginGesture();
+  let animHit = false;
+  for (let z = 0; z < c.h; z++) for (let x = 0; x < c.w; x++) {
+    const di = (z0 + z) * 64 + x0 + x;
+    tl.set(c.recs.subarray((z * c.w + x) * 28, (z * c.w + x) * 28 + 28), di * 28);
+    if (store.lvl.animTiles.includes(di)) animHit = true;
+    patchCanvas(di);
+  }
+  for (let z = 0; z <= c.h; z++) for (let x = 0; x <= c.w; x++) {
+    const v = c.hm[z * (c.w + 1) + x] + delta;
+    hm[(z0 + z) * 65 + x0 + x] = Math.max(-32768, Math.min(32767, v));
+  }
+  store.apply(s => { s.ed.tilesTouched = true; }, 'tiles');
+  store.apply(s => { s.ed.hmTouched = true; }, 'hm');
+  store.endGesture();
+  store.say(`📋 pasted ${c.w}×${c.h} at (${x0},${z0})`
+    + (T.rel ? ` · heights ${delta >= 0 ? '+' : ''}${delta}` : ' · absolute heights')
+    + (animHit ? ' · ⚠ overwrote animated tiles (their animation entries go away on save)' : ''));
 }

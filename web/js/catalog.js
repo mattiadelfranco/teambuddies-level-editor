@@ -95,10 +95,14 @@ function item(grid, label, sub, kind, id, thumbPromise, hue) {
 export function rebuild() {
   const l = store.lvl, cat = store.cat;
   cancel();
-  // units (s6)
+  // units (s6) — model previews via the 1004+slot mapping where known
   const gu = $('cat-units');
   gu.innerHTML = '';
-  cat.s6Names.forEach((n, i) => item(gu, n, 'unit ' + i, 's6', i, null, (i * 47) % 360));
+  cat.s6Names.forEach((n, i) => {
+    const dat = cat.s6Models && cat.s6Models[i];
+    item(gu, n, 'unit ' + i, 's6', i,
+         dat ? TH.globalThumb(String(dat)) : null, (i * 47) % 360);
+  });
   // level models
   const gm = $('cat-models');
   gm.innerHTML = '';

@@ -254,6 +254,38 @@ def catalogs():
     out["staticModels"] = {i: 1150 + order.index(r) for i, r in tres.items()
                           if order.index(r) < 16}
 
+    # s6 slot -> global buddy/animal model entry, for catalog previews.
+    # Slots 0-35 are LINEAR: entry = 1004 + slot (verified on the names:
+    # 1004 COMMANDO, 1005 BUDDY(=trooper), 1006 NINJA(=kung fu), 1010 ESKIMO,
+    # 1018 POBEAR, 1019 LION ... 1034 B_BABE(=Pretty), 1039 HOSTAGE).
+    # Specials 44+ matched by LOD-name keyword; dummies have no model.
+    s6m = {}
+    special = {44: "SCIENT", 45: "CAMELBAGGAGE", 46: "MECH", 47: "MECHBOSS",
+               48: "MECH", 49: "DOG_BOMB", 50: "DOG_TARGET", 51: "SCIENT",
+               52: "BADDIE", 53: "ALIEN", 54: "HOOLEY", 55: "WOLF",
+               56: "CONTROL_PANEL", 57: "EWE_FIEND", 58: "PIG",
+               59: "PENGUIN", 60: "SHEEP", 61: "DOG_TEAM"}
+    lodindex = {}
+    for folder in glob.glob(os.path.join(BIND, "1*")):
+        e = int(os.path.basename(folder))
+        if not 1000 <= e <= 1150:
+            continue
+        for f in os.listdir(folder):
+            if f.endswith(".LOD") and not f.startswith("P_"):
+                lodindex.setdefault(f[:-4].upper(), e)
+    for slot in range(36):
+        s6m[slot] = 1004 + slot
+    for slot, kw in special.items():
+        hit = next((e for n, e in sorted(lodindex.items())
+                    if n.startswith(kw)), None)
+        if hit:
+            s6m[slot] = hit
+    # capture variants reuse the plain animal models
+    s6m[58] = s6m.get(22, 1026)
+    s6m[59] = s6m.get(13, 1017)
+    s6m[60] = s6m.get(32, 1036)
+    out["s6Models"] = s6m
+
     # toy names (DAT entry 0015 = English): string i+1 = toy i
     toys = {}
     tp = os.path.join(RAW, "0015.bin")

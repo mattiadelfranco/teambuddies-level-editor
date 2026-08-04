@@ -106,6 +106,7 @@ function initPalette() {
     if (b.dataset.tm !== 'clone') TL.T.cloneSrc = null;
   });
   $('tl-size').oninput = e => { TL.T.size = +e.target.value; $('tl-sizev').textContent = e.target.value; };
+  $('tl-rel').onchange = e => { TL.T.rel = e.target.checked; };
 }
 
 export function initUI(onViewMode) {

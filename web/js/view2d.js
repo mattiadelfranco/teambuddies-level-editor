@@ -89,6 +89,14 @@ export function draw() {
       const z0 = Math.min(a[1], b[1]) | 0, z1 = Math.max(a[1], b[1]) | 0;
       ctx.strokeStyle = '#fff'; ctx.lineWidth = lw;
       ctx.strokeRect(x0 * 8, z0 * 8, (x1 - x0 + 1) * 8, (z1 - z0 + 1) * 8);
+    } else if (cursor && TL.T.mode === 'paste' && TL.T.clip) {
+      const c = TL.T.clip;
+      const x0 = Math.max(0, Math.min(64 - c.w, Math.round(cursor[0] / 8 - c.w / 2)));
+      const z0 = Math.max(0, Math.min(64 - c.h, Math.round(cursor[1] / 8 - c.h / 2)));
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = lw;
+      ctx.setLineDash([4 / Math.abs(m.a), 3 / Math.abs(m.a)]);
+      ctx.strokeRect(x0 * 8, z0 * 8, c.w * 8, c.h * 8);
+      ctx.setLineDash([]);
     } else if (cursor) {
       const s = TL.T.size, h = (s - 1) / 2;
       const x = Math.floor(cursor[0] / 8 - h) * 8, z = Math.floor(cursor[1] / 8 - h) * 8;
@@ -259,8 +267,10 @@ export function init2d(canvas, statusPos, tipEl) {
       if (TL.T.mode === 'pick' || e.altKey && TL.T.mode !== 'clone') {
         TL.readTile(tx, tz);
         store.emit('stamp');
-      } else if (TL.T.mode === 'fill') {
+      } else if (TL.T.mode === 'fill' || TL.T.mode === 'copy') {
         tileRect = [[tx, tz], [tx, tz]];
+      } else if (TL.T.mode === 'paste') {
+        TL.pasteRegion(tx, tz);
       } else if (TL.T.mode === 'clone') {
         if (e.altKey || !TL.T.cloneSrc) {
           TL.T.cloneSrc = [tx, tz];
@@ -339,8 +349,12 @@ export function init2d(canvas, statusPos, tipEl) {
     if (strokeActive()) { endStroke(); return; }   // ends its own gesture
     store.endGesture();
     if (tileRect) {
-      TL.fillRect(tileRect[0][0], tileRect[0][1], tileRect[1][0], tileRect[1][1]);
+      if (TL.T.mode === 'copy')
+        TL.copyRegion(tileRect[0][0], tileRect[0][1], tileRect[1][0], tileRect[1][1]);
+      else
+        TL.fillRect(tileRect[0][0], tileRect[0][1], tileRect[1][0], tileRect[1][1]);
       tileRect = null;
+      draw();
       return;
     }
     if (tilePaint) { tilePaint = false; TL.T.cloneDelta = null; return; }

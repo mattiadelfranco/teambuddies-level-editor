@@ -149,14 +149,19 @@ export async function levelModelThumb(entry, name) {
   return p;
 }
 
-// thumbnail of a GLOBAL model (turrets): key: dat entry
+// thumbnail of a GLOBAL model (turrets, buddies): key: dat entry.
+// A folder can hold several LODs (ninja + katana): pick the biggest one.
 export async function globalThumb(dat) {
   const key = 'g' + dat;
   if (done.has(key)) return done.get(key);
   const p = (async () => {
     const j = await api.global3d(dat);
-    const names = Object.keys(j.models);
-    return names.length ? render(j.models[names[0]], j.tex) : null;
+    let best = null, bn = 0;
+    for (const b of Object.values(j.models)) {
+      const n = b.reduce((s, x) => s + x.p.length, 0);
+      if (n > bn) { bn = n; best = b; }
+    }
+    return best ? render(best, j.tex) : null;
   })();
   done.set(key, p);
   return p;

@@ -582,7 +582,9 @@ function input() {
           mode = 'tilepaint';
           store.beginGesture();
           TL.paintAt(g[0], g[1]);
-        } else store.say('fill rect works in the 2D view — use paint here.');
+        } else if (TL.T.mode === 'paste') {
+          TL.pasteRegion(g[0], g[1]);
+        } else store.say('fill/copy rectangles work in the 2D view — paint and paste work here.');
       }
       return;
     }

@@ -44,8 +44,12 @@
     <button data-tm="paint" class="on" title="Paint with the selected tile (Alt = eyedropper)">🖌 Paint</button
     ><button data-tm="fill" title="Drag a rectangle to fill (2D)">▧ Fill</button
     ><button data-tm="clone" title="Alt-click sets the source, then paint to copy">⧉ Clone</button
-    ><button data-tm="pick" title="Eyedropper: read a tile into the stamp">⌖ Pick</button>
+    ><button data-tm="pick" title="Eyedropper: read a tile into the stamp">⌖ Pick</button
+    ><button data-tm="copy" title="Drag a rectangle to copy tiles + heights (2D)">⛶ Copy</button
+    ><button data-tm="paste" title="Click to paste the copied region (works across levels, 2D and 3D)">📋 Paste</button>
   </div>
+  <label title="Shift pasted heights so the region's lowest point sits on the target terrain (snap 4). Unchecked = absolute heights.">
+    <input id="tl-rel" type="checkbox" checked> relative heights</label>
   <label>Size <input id="tl-size" type="range" min="1" max="4" value="1">
     <span id="tl-sizev">1</span></label>
   <button id="tl-rot" title="Rotate the stamp 90°">⟳</button>
