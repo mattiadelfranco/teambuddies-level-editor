@@ -29,6 +29,30 @@ def _b64(b):
     return base64.b64encode(bytes(b)).decode()
 
 
+def bind_write(members):
+    """Scrive un BIND da [(nome, bytes), ...]. Layout del formato: header
+    "BIND"+count, directory 40B (nome[32] + off u32 + size u32, offset
+    ASSOLUTI), membri con offset = align4(fine precedente) + 4 (regola
+    osservata su tutti i BIND vanilla; round-trip byte-identico validato)."""
+    n = len(members)
+    out = bytearray(b"BIND")
+    out += struct.pack("<I", n)
+    dir_off = 8
+    out += b"\0" * (n * 40)
+    offs = []
+    for name, data in members:
+        offs.append(len(out))
+        out += data
+        pos = (len(out) + 3) & ~3          # OGNI membro e' seguito da
+        out += b"\0" * (pos - len(out) + 4)  # align4 + 4 byte di gap
+
+    for k, (name, data) in enumerate(members):
+        nb = name.encode("latin-1")[:31]
+        struct.pack_into("<32sII", out, dir_off + k * 40,
+                         nb + b"\0" * (32 - len(nb)), offs[k], len(data))
+    return bytes(out)
+
+
 def level_folder(entry):
     """Folder to parse for a level: mods/<entry> if it has level files."""
     mod = os.path.join(MODS, entry)

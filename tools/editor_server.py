@@ -474,6 +474,58 @@ def apply_edits(entry, edits):
 
     # --- PND ---
     d = bytearray(open(pnd_path, "rb").read())
+
+    # MODELLI IMPORTATI da altri livelli: [{"from": "0520", "name": "frn_cleo_sphinx"}]
+    # -> copia il .LOD (e le TIM delle sue part) nel MDL.BND/TIM.BND del mod e
+    # aggiunge il nome alla lista modelli del PND (il motore registra le
+    # risorse per nome dal MDL.BND del livello). NB le TIM importate tengono
+    # le coordinate VRAM originali: possibili conflitti visivi da testare in
+    # gioco. PRIMA di hm/tiles/istanze: la lista nomi shifta tutto il PND.
+    if edits.get("addModels"):
+        mdl_path = next(os.path.join(dst, f) for f in os.listdir(dst)
+                        if f.upper() == "MDL.BND")
+        timb_path = next(os.path.join(dst, f) for f in os.listdir(dst)
+                         if f.upper() == "TIM.BND")
+        mdl = tb_lod.parse_bind(open(mdl_path, "rb").read())
+        timb = tb_lod.parse_bind(open(timb_path, "rb").read())
+        mkeys = {n.upper().rsplit(".", 1)[0] for n, _ in mdl}
+        tkeys = {n.upper().rsplit(".", 1)[0] for n, _ in timb}
+        n_names, = struct.unpack_from("<H", d, 4)
+        names = [bytes(d[12 + i * 32: 12 + (i + 1) * 32]) for i in range(n_names)]
+        namekeys = {n.split(b"\0")[0].decode("latin-1").upper() for n in names}
+        for imp in edits["addModels"]:
+            src = os.path.join(BIND, str(imp["from"]))
+            name = imp["name"]
+            key = name.upper()
+            smdl = tb_lod.parse_bind(open(os.path.join(src, "MDL.BND"), "rb").read())
+            member = next(((n, dat) for n, dat in smdl
+                           if n.upper().rsplit(".", 1)[0] == key), None)
+            if member is None:
+                raise ValueError(f"addModels: {name} non trovato in {imp['from']}")
+            if key not in mkeys:
+                mdl.append(member)
+                mkeys.add(key)
+                stim = tb_lod.parse_bind(open(os.path.join(src, "TIM.BND"), "rb").read())
+                pm = tb_lod.parse_lod(member[1])
+                for lod in pm["lods"]:
+                    for p in lod["parts"]:
+                        t = (p["tex"] or "").upper()
+                        if t and t not in tkeys:
+                            tm = next(((n, dat) for n, dat in stim
+                                       if n.upper().rsplit(".", 1)[0] == t), None)
+                            if tm:
+                                timb.append(tm)
+                                tkeys.add(t)
+            if key not in namekeys:
+                nb = name.encode("latin-1")[:31]
+                names.append(nb + b"\0" * (32 - len(nb)))
+                namekeys.add(key)
+        open(mdl_path, "wb").write(tb_level.bind_write(mdl))
+        open(timb_path, "wb").write(tb_level.bind_write(timb))
+        if len(names) != n_names:
+            d[12:12 + n_names * 32] = b"".join(names)
+            struct.pack_into("<H", d, 4, len(names))
+
     n_names, n_inst, _, _ = struct.unpack_from("<4H", d, 4)
     base = 12 + n_names * 32
 
@@ -585,8 +637,9 @@ def apply_edits(entry, edits):
 _3D_CACHE = {}
 
 
-def _build_3d(model_files, tim_files):
-    """JSON mesh+texture dal formato .LOD/.TIM: liste di (nome, bytes)."""
+def _build_3d(model_files, tim_files, pose=None):
+    """JSON mesh+texture dal formato .LOD/.TIM: liste di (nome, bytes).
+    pose = parser alternativo (es. _pose_turret)."""
     out = {"models": {}, "tex": {}}
     timsz = {}
     for name, data in tim_files:
@@ -602,7 +655,7 @@ def _build_3d(model_files, tim_files):
         for name, data in model_files:
             key = name.upper().rsplit(".", 1)[0]
             try:
-                m = tb_lod.parse_lod(data)
+                m = (pose or tb_lod.parse_lod)(data)
             except Exception:
                 continue
             batches = []
@@ -642,26 +695,48 @@ def _build_3d(model_files, tim_files):
 
 def api_3d(entry):
     """Dati 3D del livello per l'editor: mesh dei modelli (MDL.BND, formato .LOD
-    reversato - vedi tb_lod.py) + texture (TIM.BND). Cache in memoria."""
-    if entry in _3D_CACHE:
-        return _3D_CACHE[entry]
-    folder = os.path.join(BIND, entry)
-    models, tims = [], []
+    reversato - vedi tb_lod.py) + texture (TIM.BND). Mods-aware (i modelli
+    importati vivono nel MDL.BND del mod); cache invalidata dal mtime."""
+    folder, _ = tb_level.level_folder(entry)
+    mdl_path = os.path.join(folder, "MDL.BND")
     tim_path = os.path.join(folder, "TIM.BND")
+    key = (entry, os.path.getmtime(mdl_path) if os.path.exists(mdl_path) else 0)
+    if key in _3D_CACHE:
+        return _3D_CACHE[key]
+    models, tims = [], []
     if os.path.exists(tim_path):
         tims = list(tb_lod.parse_bind(open(tim_path, "rb").read()))
-    mdl_path = os.path.join(folder, "MDL.BND")
     if os.path.exists(mdl_path):
         models = list(tb_lod.parse_bind(open(mdl_path, "rb").read()))
     out = _build_3d(models, tims)
-    _3D_CACHE[entry] = out
+    _3D_CACHE[key] = out
     return out
+
+
+def _pose_turret(lod_bytes):
+    """POSA STATICA per i modelli torretta: i .LOD hanno 5 part con un'unica
+    origine e la CANNA modellata in VERTICALE (bbox a>=150: in gioco il motore
+    la assembla/ruota col sistema di animazione). Per l'anteprima ruotiamo le
+    part alte di -90 gradi attorno all'asse c passante per la loro base:
+    (da, b) -> (b, -da). Approssimazione della rest pose, non la vera catena
+    di trasformazioni del motore (R_ANIMATIONS.BIN, non ancora reversato)."""
+    m = tb_lod.parse_lod(lod_bytes)
+    for lod in m["lods"]:
+        for p in lod["parts"]:
+            if not p["verts"]:
+                continue
+            mn = min(v[0] for v in p["verts"])
+            if mn < 150:
+                continue
+            p["verts"] = [(mn + b, -(a - mn), c) for a, b, c in p["verts"]]
+            p["norms"] = [(nb, -na, nc) for na, nb, nc in p["norms"]]
+    return m
 
 
 def api_global3d(dat):
     """Modello GLOBALE (entry DAT tipo 1150-1165 TURRET*): la cartella
     bind/<dat> estratta contiene .LOD e .TIM sciolti. Ritorna lo stesso JSON
-    di api_3d (i proiettili P_* vengono saltati)."""
+    di api_3d (i proiettili P_* vengono saltati; part alte in posa statica)."""
     key = "g" + dat
     if key in _3D_CACHE:
         return _3D_CACHE[key]
@@ -671,7 +746,7 @@ def api_global3d(dat):
               if f.endswith(".LOD") and not f.startswith("P_")]
     tims = [(f, open(os.path.join(folder, f), "rb").read())
             for f in sorted(os.listdir(folder)) if f.endswith(".TIM")]
-    out = _build_3d(models, tims)
+    out = _build_3d(models, tims, pose=_pose_turret)
     _3D_CACHE[key] = out
     return out
 

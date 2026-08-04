@@ -5,10 +5,13 @@
 import { store } from './store.js';
 import * as It from './items.js';
 import * as TH from './thumbs.js';
+import { api } from './api.js';
 
 const $ = id => document.getElementById(id);
 
-export let pending = null;      // {kind:'s6'|'in'|'tr', id, label}
+export let pending = null;      // {kind:'s6'|'in'|'tr'|'imp', id, label, ...}
+export let onImportModel = null;   // set by main.js -> view3d.importModel
+export function setImportHook(fn) { onImportModel = fn; }
 
 export function cancel() {
   if (!pending) return;
@@ -40,6 +43,22 @@ export function placeAt(wx, wz) {
   } else if (p.kind === 'tr') {
     if (!store.ed.extra) { store.say('extra list not decodable for this level'); return true; }
     store.apply(() => It.addExtra(p.id, +$('cat-trteam').value, wx, wz));
+  } else if (p.kind === 'imp') {
+    const l = store.lvl;
+    store.apply(s => {
+      let idx = l.models.findIndex(n => (n || '').toUpperCase() === p.name.toUpperCase());
+      if (idx < 0) {
+        l.models.push(p.name);
+        s.ed.addModels.push({ from: p.from, name: p.name });
+        idx = l.models.length - 1;
+      }
+      const tpl = p.tpl || [0, 0, 0, 0, 0, 0, 0];
+      const r = [idx, Math.round(wx), 0, Math.round(512 - wz), tpl[4], tpl[5], tpl[6]];
+      r[2] = Math.round(It.heightAt(wx / 8, wz / 8) * 8);
+      s.ed.inst.push(r);
+      s.sel = { k: 'in', i: s.ed.inst.length - 1 };
+    });
+    if (onImportModel) onImportModel(p.from, p.name);
   }
   return true;
 }
@@ -109,6 +128,7 @@ export function rebuild() {
       item(gs, k + ' ' + name, safe, 'tr', k, dat ? TH.globalThumb(String(dat)) : null, 185);
     }
   }
+  rebuildImports();
   filter();
 }
 
@@ -117,4 +137,53 @@ export function filter() {
   document.querySelectorAll('.cat-item').forEach(e => {
     e.style.display = !q || e.dataset.search.includes(q) ? '' : 'none';
   });
+}
+
+// ---- import from another level ----
+export function rebuildImports() {
+  const sel = $('cat-implvl');
+  const opts = store.cat.levels.filter(l => l.entry !== store.entry);
+  sel.innerHTML = opts.map(l => `<option value="${l.entry}">${l.entry} — ${l.name}</option>`).join('');
+  sel.onchange = () => buildImportGrid(sel.value);
+  if (opts.length) buildImportGrid(opts[0].entry);
+}
+
+async function buildImportGrid(src) {
+  const grid = $('cat-imports');
+  grid.innerHTML = '<div class="hint" style="grid-column:1/-1">loading…</div>';
+  try {
+    const l = await api.level(src);
+    grid.innerHTML = '';
+    l.models.forEach((name, i) => {
+      if (!name) return;
+      const tpl = l.inst.find(r => r[0] === i);   // e-param/rot defaults
+      const div = document.createElement('div');
+      div.className = 'cat-item';
+      div.dataset.search = (name + ' import ' + src).toLowerCase();
+      const img = new Image();
+      img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E';
+      TH.levelModelThumb(src, name).then(u => { if (u) img.src = u; }).catch(() => {});
+      div.appendChild(img);
+      const cap = document.createElement('div');
+      cap.textContent = name;
+      cap.title = name + ' — from ' + src;
+      div.appendChild(cap);
+      div.onclick = () => armImport(src, name, tpl, div);
+      grid.appendChild(div);
+    });
+    filter();
+  } catch (e) {
+    grid.innerHTML = '<div class="hint" style="grid-column:1/-1">failed to load level</div>';
+  }
+}
+
+function armImport(from, name, tpl, el) {
+  document.querySelectorAll('.cat-item.on').forEach(e => e.classList.remove('on'));
+  if (pending && pending.kind === 'imp' && pending.name === name && pending.from === from)
+    return cancel();
+  pending = { kind: 'imp', from, name, tpl, label: name + ' (from ' + from + ')' };
+  el.classList.add('on');
+  $('placebar-txt').textContent = 'Placing: ' + pending.label + ' — click the map';
+  $('placebar').style.display = 'flex';
+  store.say('▸ importing "' + name + '" from level ' + from + ' — click the map to place it.');
 }

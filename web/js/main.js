@@ -30,6 +30,7 @@ async function boot() {
   initUI(setMode);
   init2d($('cv2d'), $('st-pos'), $('tip'));
   V3.init3d($('cv3d'), $('st-pos'));
+  CAT.setImportHook((from, name) => V3.importModel(from, name));
 
   // camera buttons (Layers tab, 3D mode)
   $('ly-rotl').onclick = () => V3.rotateCam(Math.PI / 2);

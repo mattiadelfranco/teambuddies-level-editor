@@ -62,6 +62,7 @@ export const store = {
       inst: ed.inst.map(r => r.slice()),
       hm: ed.hm.slice(), hmTouched: ed.hmTouched,
       tiles: ed.tiles.slice(), tilesTouched: ed.tilesTouched,
+      addModels: ed.addModels.map(m => ({ ...m })),
       rec: { set: this.rec.set, pairs: this.rec.pairs.map(p => p.slice()), touched: this.rec.touched },
       sel: this.sel ? { ...this.sel } : null, dirty: this.dirty,
       entry: this.entry,
@@ -81,6 +82,9 @@ export const store = {
     for (let i = 0; i < ed.tiles.length; i++)
       if (ed.tiles[i] !== s.tiles[i]) { tilesChanged = true; break; }
     ed.tiles.set(s.tiles); ed.tilesTouched = s.tilesTouched;
+    ed.addModels = s.addModels.map(m => ({ ...m }));
+    this.lvl.models = this.lvl.models.slice(0, ed.baseModelCount)
+      .concat(ed.addModels.map(m => m.name));
     this.rec = { set: s.rec.set, pairs: s.rec.pairs.map(p => p.slice()), touched: s.rec.touched };
     this.sel = s.sel ? { ...s.sel } : null;
     this.dirty = s.dirty;
@@ -160,9 +164,15 @@ export const store = {
         hmTouched: false,
         tiles: b64u8(this.lvl.tiles),     // editable tile array (4096 x 28B)
         tilesTouched: false,
+        addModels: [],                    // models imported from other levels
+        baseModelCount: this.lvl.models.length,
       };
     }
     this.ed = this.edits[entry];
+    // unsaved imports survive a level round-trip: re-extend the model list
+    for (const m of this.ed.addModels)
+      if (!this.lvl.models.some(n => (n || '').toUpperCase() === m.name.toUpperCase()))
+        this.lvl.models.push(m.name);
     this.hm = this.ed.hm;                 // views read the editable copy
     this.sel = null;
     // auto-follow the level's recipe set unless the user is mid-edit
@@ -195,6 +205,7 @@ export const store = {
     if (ed.extra) edits.extra = ed.extra;
     if (ed.hmTouched) edits.hm = u8b64(new Uint8Array(ed.hm.buffer.slice(0)));
     if (ed.tilesTouched) edits.tiles = u8b64(ed.tiles);
+    if (ed.addModels.length) edits.addModels = ed.addModels;
     const r = await api.save(this.entry, edits);
     if (r.ok) {
       this.dirty = false;
@@ -206,6 +217,8 @@ export const store = {
       this.lvl = await api.level(this.entry);
       ed.hm.set(b64i16(this.lvl.hm));     // keep the shared references alive
       ed.tiles.set(b64u8(this.lvl.tiles));
+      ed.addModels = [];                  // imports are now part of the level
+      ed.baseModelCount = this.lvl.models.length;
       this.emit('saved');
     } else {
       this.say('SAVE ERROR: ' + (r.err || ''));

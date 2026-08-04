@@ -156,6 +156,8 @@ export function load() {
     E3.models = {};
     for (const [name, batches] of Object.entries(jd.models))
       E3.models[name] = buildBatches(batches);
+    // unsaved imports from other levels need their meshes too
+    for (const m of store.ed.addModels || []) importModel(m.from, m.name);
   }).catch(() => store.say('3D models unavailable (is the server running?)'));
 }
 
@@ -192,6 +194,21 @@ function globalMesh(dat) {
     }).catch(() => {});
   }
   return null;
+}
+
+// register a model from ANOTHER level (import preview): mesh + its textures
+export function importModel(from, name) {
+  api.models3d(String(from)).then(j => {
+    const key = name.toUpperCase();
+    if (!j.models[key] || !E3.models) return;
+    for (const [tn, uri] of Object.entries(j.tex || {})) {
+      if (E3.texs[tn]) continue;
+      const im = new Image();
+      im.onload = () => { E3.texs[tn] = tex(im); };
+      im.src = uri;
+    }
+    if (!E3.models[key]) E3.models[key] = buildBatches(j.models[key]);
+  }).catch(() => {});
 }
 
 export function reload() { E3.entry = null; if (E3.on) load(); }
