@@ -136,6 +136,7 @@ export function initUI(onViewMode) {
   // tools + brush sub-bar
   $('t_select').onclick = () => setTool('select');
   $('t_height').onclick = () => setTool('height');
+  $('t_tiles').onclick = () => setTool('tiles');
   document.querySelectorAll('#subbar [data-bm]').forEach(b => b.onclick = () => {
     document.querySelectorAll('#subbar [data-bm]').forEach(x =>
       x.classList.toggle('on', x === b));
