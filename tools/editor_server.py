@@ -477,6 +477,18 @@ def apply_edits(entry, edits):
     n_names, n_inst, _, _ = struct.unpack_from("<4H", d, 4)
     base = 12 + n_names * 32
 
+    # heightmap 65x65 s16 (base64 LE): dimensione fissa -> scrittura in place.
+    # Applicata PRIMA delle pedane, così lo spianamento sotto le pedane
+    # spostate lavora sul terreno scolpito. MAX/MINHEIGHTS le ricalcola il
+    # motore al load (FUN_800aa4b0); il PTH NON viene rigenerato.
+    if "hm" in edits:
+        hm = base64.b64decode(edits["hm"])
+        if len(hm) != 65 * 65 * 2:
+            raise ValueError(f"hm: dimensione {len(hm)} != {65 * 65 * 2}")
+        _, _, off_hm, _ = _tiles_layout(d)
+        if bytes(d[off_hm:off_hm + len(hm)]) != hm:
+            d[off_hm:off_hm + len(hm)] = hm
+
     # istanze, lista completa [[modello, x, alt, z, e, r1, r2], ...]: sostituisce
     # tutta la lista (aggiunta/rimozione/spostamento in un colpo solo; il resto
     # del PND si legge in sequenza, quindi lo splice basta)

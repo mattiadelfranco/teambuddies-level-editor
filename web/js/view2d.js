@@ -4,6 +4,7 @@ import { store } from './store.js';
 import { items, moveItem, owner, heightAt } from './items.js';
 import { b64u8 } from './api.js';
 import { api } from './api.js';
+import { brush, beginStroke, moveStroke, endStroke, strokeActive } from './terrain.js';
 
 const W = 512;
 const SEC_COLORS = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#e84393',
@@ -12,6 +13,7 @@ const SEC_COLORS = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#e84393',
 
 let cv, ctx, ground = null, groundEntry = null, hover = null;
 let drag = null;
+let cursor = null;      // last mouse pos in world units (brush cursor)
 
 function hash(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
 export function modelColor(n) {
@@ -61,6 +63,16 @@ export function draw() {
   if (v.layers.pth) drawPth();
   drawSections(m);
   drawMarkers(m);
+  // brush cursor (heights tool)
+  if (store.tool === 'height' && cursor) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1.5 / Math.abs(m.a);
+    ctx.setLineDash([4 / Math.abs(m.a), 3 / Math.abs(m.a)]);
+    ctx.beginPath();
+    ctx.arc(cursor[0], cursor[1], brush.radius * 8, 0, 7);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
@@ -191,6 +203,11 @@ export function init2d(canvas, statusPos, tipEl) {
   cv.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
     const [wx, wz] = evtWorld(e);
+    if (store.tool === 'height') {
+      beginStroke(wx / 8, wz / 8, e.altKey);
+      e.preventDefault();
+      return;
+    }
     const it = pick(wx, wz);
     if (it) {
       store.apply(s => { s.sel = { k: it.k, i: it.i }; }, 'select');
@@ -202,10 +219,16 @@ export function init2d(canvas, statusPos, tipEl) {
   });
 
   window.addEventListener('mousemove', e => {
-    if (!store.lvl) return;
+    if (!store.lvl || store.view.mode !== '2d') return;
     const [wx, wz] = evtWorld(e);
     if (statusPos) statusPos.textContent =
       `tile (${(wx / 8).toFixed(2)}, ${(wz / 8).toFixed(2)})  world (${wx.toFixed(0)}, ${wz.toFixed(0)})  h=${heightAt(wx / 8, wz / 8).toFixed(1)}`;
+    if (store.tool === 'height') {
+      cursor = e.target === cv ? [wx, wz] : null;
+      if (strokeActive()) { moveStroke(wx / 8, wz / 8, e.altKey); return; }
+      draw();
+      return;
+    }
     if (drag && !drag.empty) {
       drag.moved = true;
       store.apply(() => moveItem(drag.it, Math.max(0, Math.min(W, wx)), Math.max(0, Math.min(W, wz))));
@@ -232,6 +255,7 @@ export function init2d(canvas, statusPos, tipEl) {
   });
 
   window.addEventListener('mouseup', () => {
+    if (strokeActive()) { endStroke(); return; }
     if (drag && drag.empty && !drag.moved) {
       // click on empty ground: copy exact coordinates
       const l = store.lvl, wx = drag.wx, wz = drag.wz;

@@ -1,8 +1,9 @@
 import { store } from './store.js';
 import { init2d, draw, loadGround, reloadGround } from './view2d.js';
 import * as V3 from './view3d.js';
-import { initUI, setViewButtons } from './ui.js';
+import { initUI, setViewButtons, setTool } from './ui.js';
 import { deleteSel } from './items.js';
+import { brush, strokeActive } from './terrain.js';
 
 const $ = id => document.getElementById(id);
 
@@ -41,20 +42,29 @@ async function boot() {
       V3.refreshTerrain();
     }
     if (what === 'layers') V3.composeGround();
+    if (what === 'hm') V3.refreshTerrainMesh();
     if (store.view.mode === '2d') draw();
   });
 
   window.addEventListener('keydown', e => {
     if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (store.sel) {
+      if (store.sel && store.tool === 'select') {
         let err;
         store.apply(() => { err = deleteSel(); });
         if (err) store.say(err);
         e.preventDefault();
       }
-    } else if (e.key === 'Escape' && store.sel) {
-      store.apply(s => { s.sel = null; }, 'select');
+    } else if (e.key === 'Escape') {
+      if (store.sel) store.apply(s => { s.sel = null; }, 'select');
+      else if (store.tool !== 'select') setTool('select');
+    } else if (e.key === 'v' || e.key === 'V') setTool('select');
+    else if (e.key === 'h' || e.key === 'H') setTool('height');
+    else if ((e.key === '[' || e.key === ']') && store.tool === 'height' && !strokeActive()) {
+      brush.radius = Math.max(1, Math.min(8, brush.radius + (e.key === ']' ? 0.5 : -0.5)));
+      document.getElementById('br-radius').value = brush.radius;
+      document.getElementById('br-radiusv').textContent = String(brush.radius);
+      if (store.view.mode === '2d') draw();
     }
   });
 

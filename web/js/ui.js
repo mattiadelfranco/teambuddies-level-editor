@@ -2,9 +2,19 @@
 import { store, ZONE_PRESETS } from './store.js';
 import * as It from './items.js';
 import { modelColor } from './view2d.js';
+import { brush } from './terrain.js';
 
 const $ = id => document.getElementById(id);
 const isAuto = name => /auto/i.test(name || '');
+
+export function setTool(tool) {
+  store.apply(s => { s.tool = tool; }, 'tool');
+  $('t_select').classList.toggle('on', tool === 'select');
+  $('t_height').classList.toggle('on', tool === 'height');
+  $('subbar').style.display = tool === 'height' ? 'flex' : 'none';
+  if (tool === 'height' && !store.view.layers.hm)
+    store.apply(s => { s.view.layers.hm = true; }, 'layers');
+}
 
 export function initUI(onViewMode) {
   // tabs
@@ -31,6 +41,20 @@ export function initUI(onViewMode) {
   };
   $('v2d').onclick = () => onViewMode('2d');
   $('v3d').onclick = () => onViewMode('3d');
+
+  // tools + brush sub-bar
+  $('t_select').onclick = () => setTool('select');
+  $('t_height').onclick = () => setTool('height');
+  document.querySelectorAll('#subbar [data-bm]').forEach(b => b.onclick = () => {
+    document.querySelectorAll('#subbar [data-bm]').forEach(x =>
+      x.classList.toggle('on', x === b));
+    brush.mode = b.dataset.bm;
+    $('br-valrow').style.display = brush.mode === 'set' ? '' : 'none';
+  });
+  $('br-radius').oninput = e => { brush.radius = +e.target.value; $('br-radiusv').textContent = e.target.value; };
+  $('br-strength').oninput = e => { brush.strength = +e.target.value; $('br-strengthv').textContent = e.target.value; };
+  $('br-value').onchange = e => { brush.value = +e.target.value | 0; };
+  $('br-snap').onchange = e => { brush.snap4 = e.target.checked; };
 
   // view / layers
   $('ly-mx').onchange = e => store.apply(s => { s.view.mirrorX = e.target.checked; }, 'view');

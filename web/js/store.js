@@ -45,7 +45,7 @@ export const store = {
   // every mutation goes through here
   apply(fn, what = 'edit') {
     fn(this);
-    if (what === 'edit') this.dirty = true;
+    if (what === 'edit' || what === 'hm') this.dirty = true;
     this.emit(what);
   },
 
@@ -62,7 +62,6 @@ export const store = {
   async load(entry) {
     this.lvl = await api.level(entry);
     this.entry = entry;
-    this.hm = b64i16(this.lvl.hm);
     if (!this.edits[entry]) {
       const l = this.lvl, mis = this.mission();
       const zc = this.cat.zcfg[mis] || [];
@@ -76,9 +75,12 @@ export const store = {
         s6: JSON.parse(JSON.stringify(l.s6)),
         extra: l.extra ? l.extra.map(r => r.slice()) : null,
         inst: l.inst.map(r => r.slice()),
+        hm: b64i16(this.lvl.hm),          // editable heightmap (65x65 s16)
+        hmTouched: false,
       };
     }
     this.ed = this.edits[entry];
+    this.hm = this.ed.hm;                 // views read the editable copy
     this.sel = null;
     // auto-follow the level's recipe set unless the user is mid-edit
     const ds = this.cat.mset[this.mission()];
@@ -108,14 +110,22 @@ export const store = {
     if (this.rec.touched) edits.recipes = { set: this.rec.set, pairs: this.rec.pairs };
     if (ed.tcountTouched) edits.teamCount = ed.tcount;
     if (ed.extra) edits.extra = ed.extra;
+    if (ed.hmTouched) {
+      // 65x65 s16 LE -> base64
+      const b = new Uint8Array(ed.hm.buffer.slice(0));
+      let s = '';
+      for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+      edits.hm = btoa(s);
+    }
     const r = await api.save(this.entry, edits);
     if (r.ok) {
       this.dirty = false;
       if (r.recipes) this.rec.touched = false;
+      ed.hmTouched = false;
       this.say('✓ saved to mods/' + this.entry + (r.recipes ? ' (+recipe set ' + r.recipes.set + ')' : ''));
       // reload from disk so the baseline matches what was written
       this.lvl = await api.level(this.entry);
-      this.hm = b64i16(this.lvl.hm);
+      ed.hm.set(b64i16(this.lvl.hm));     // keep the shared reference alive
       this.emit('saved');
     } else {
       this.say('SAVE ERROR: ' + (r.err || ''));

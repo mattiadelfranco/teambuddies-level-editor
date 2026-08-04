@@ -18,10 +18,29 @@
   <button id="build">🔨 Build ISO</button>
 </header>
 
+<div id="subbar" style="display:none">
+  <div class="seg">
+    <button data-bm="raise" class="on" title="Raise (LMB; hold Alt to lower)">▲ Raise</button
+    ><button data-bm="lower" title="Lower">▼ Lower</button
+    ><button data-bm="flatten" title="Flatten to the height under the stroke start">▭ Flatten</button
+    ><button data-bm="smooth" title="Smooth">≈ Smooth</button
+    ><button data-bm="set" title="Set an exact height">= Set</button>
+  </div>
+  <label>Radius <input id="br-radius" type="range" min="1" max="8" step="0.5" value="3">
+    <span id="br-radiusv">3</span></label>
+  <label>Strength <input id="br-strength" type="range" min="1" max="16" value="4">
+    <span id="br-strengthv">4</span></label>
+  <label id="br-valrow" style="display:none">Height
+    <input id="br-value" type="number" value="0" step="4" style="width:60px"></label>
+  <label title="Vanilla terrain uses steps of 4 (= half a tile)">
+    <input id="br-snap" type="checkbox" checked> snap 4</label>
+  <span class="hint">4 units = ½ tile · AI paths (PTH) are NOT regenerated</span>
+</div>
+
 <div id="body">
   <nav id="tools">
     <button id="t_select" class="tool on" title="Select / move (V)">◇</button>
-    <button class="tool off" title="Heights — coming in phase 1">▲</button>
+    <button id="t_height" class="tool" title="Sculpt heights (H)">▲</button>
     <button class="tool off" title="Tiles — coming in phase 2">▦</button>
   </nav>
 

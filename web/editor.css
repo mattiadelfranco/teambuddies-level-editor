@@ -15,6 +15,13 @@ body {
 .grow { flex: 1; }
 #dirty { color: #ffa502; font-size: 12px; }
 
+/* ---- tool sub-bar ---- */
+#subbar {
+  display: flex; align-items: center; gap: 14px; padding: 5px 12px;
+  background: #171a20; border-bottom: 1px solid #2a2e36; font-size: 12px;
+}
+#subbar input[type=range] { width: 90px; }
+
 /* ---- main area ---- */
 #body { flex: 1; display: flex; min-height: 0; }
 #tools {

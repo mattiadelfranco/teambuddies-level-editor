@@ -5,6 +5,7 @@
 import { store } from './store.js';
 import { items, moveItem, heightAt } from './items.js';
 import { api, b64u8 } from './api.js';
+import { brush, beginStroke, moveStroke, endStroke, strokeActive } from './terrain.js';
 
 const TCOLS = [[231, 76, 60], [52, 152, 219], [46, 204, 113], [241, 196, 15],
   [155, 89, 182], [230, 126, 34], [26, 188, 156], [149, 165, 166]];
@@ -168,6 +169,7 @@ export function load() {
 
 export function reload() { E3.entry = null; if (E3.on) load(); }
 export function refreshTerrain() { buildTerrain(); composeGround(); }
+export function refreshTerrainMesh() { buildTerrain(); }
 
 // compose ground + heightmap + PTH layers into one terrain texture
 export function composeGround() {
@@ -432,6 +434,35 @@ function render() {
       gl.depthMask(true);
     }
   }
+  // brush ring (heights tool)
+  if (store.tool === 'height' && E3.brushPos) {
+    gl.depthMask(false);
+    drapedRing(E3.brushPos[0], E3.brushPos[1], brush.radius, [1, 1, 1, 0.7]);
+    gl.depthMask(true);
+  }
+}
+
+function drapedRing(cx, cz, r, col) {
+  const gl = E3.gl, L = E3.loc, N = 40, v = [], w = 0.08;
+  for (let i = 0; i < N; i++) {
+    const a = i / N * 6.2832, b = (i + 1) / N * 6.2832;
+    const p = [[cx + Math.cos(a) * (r - w), cz + Math.sin(a) * (r - w)],
+               [cx + Math.cos(a) * (r + w), cz + Math.sin(a) * (r + w)],
+               [cx + Math.cos(b) * (r + w), cz + Math.sin(b) * (r + w)],
+               [cx + Math.cos(b) * (r - w), cz + Math.sin(b) * (r - w)]];
+    [p[0], p[1], p[2], p[0], p[2], p[3]].forEach(q =>
+      v.push(q[0], heightAt(q[0], q[1]) + 0.1, q[1], 0, 1, 0, 0, 0));
+  }
+  const b2 = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b2);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STREAM_DRAW);
+  gl.vertexAttribPointer(L.aP, 3, gl.FLOAT, false, 32, 0);
+  gl.vertexAttribPointer(L.aN, 3, gl.FLOAT, false, 32, 12);
+  gl.vertexAttribPointer(L.aU, 2, gl.FLOAT, false, 32, 24);
+  gl.uniform3f(L.uT, 0, 0, 0); gl.uniform1f(L.uRot, 0);
+  gl.uniform4fv(L.uCol, col); gl.uniform1f(L.uLit, 0); gl.uniform1i(L.uTexOn, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, v.length / 8);
+  gl.deleteBuffer(b2);
 }
 
 // ---------------------------------------------------------------- input ----
@@ -458,6 +489,15 @@ function input() {
     sx = mx; sy = my; moved = 0;
     if (e.button === 1 || e.shiftKey) { mode = 'pan'; return; }
     if (e.button === 2) { mode = 'orbit'; return; }
+    if (store.tool === 'height') {
+      const g = groundHit(mx, my, c.clientWidth, c.clientHeight);
+      if (g) {
+        mode = 'sculpt';
+        E3.sculptY = heightAt(g[0], g[1]);   // stable picking plane for the stroke
+        beginStroke(g[0], g[1], e.altKey);
+      }
+      return;
+    }
     const it = pick3(mx, my);
     if (it) {
       mode = 'move';
@@ -472,6 +512,15 @@ function input() {
       const g = groundHit(mx, my, c.clientWidth, c.clientHeight);
       if (g && isFinite(g[0])) E3.statusPos.textContent =
         `tile (${g[0].toFixed(2)}, ${g[1].toFixed(2)})  world (${(g[0] * 8).toFixed(0)}, ${(g[1] * 8).toFixed(0)})  h=${heightAt(g[0], g[1]).toFixed(1)}`;
+      E3.brushPos = (store.tool === 'height' && g && isFinite(g[0])) ? g : null;
+    }
+    if (mode === 'sculpt') {
+      const g = groundHit(mx, my, c.clientWidth, c.clientHeight, E3.sculptY);
+      if (g && isFinite(g[0])) {
+        E3.brushPos = g;
+        moveStroke(Math.max(0, Math.min(64, g[0])), Math.max(0, Math.min(64, g[1])), e.altKey);
+      }
+      return;
     }
     if (!mode) return;
     const dx = mx - sx, dy = my - sy;
@@ -497,6 +546,7 @@ function input() {
     }
   });
   window.addEventListener('mouseup', e => {
+    if (mode === 'sculpt') { endStroke(); mode = null; return; }
     if (mode === 'orbit' && moved < 5 && E3.on && e.target === c) {
       const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
       const g = groundHit(mx, my, c.clientWidth, c.clientHeight);
