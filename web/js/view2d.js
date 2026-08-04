@@ -6,6 +6,7 @@ import { b64u8 } from './api.js';
 import { api } from './api.js';
 import { brush, beginStroke, moveStroke, endStroke, strokeActive } from './terrain.js';
 import * as TL from './tiles.js';
+import * as CAT from './catalog.js';
 
 const W = 512;
 const SEC_COLORS = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#e84393',
@@ -237,6 +238,12 @@ export function init2d(canvas, statusPos, tipEl) {
   cv.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
     const [wx, wz] = evtWorld(e);
+    if (CAT.pending) {
+      if (CAT.placeAt(Math.max(0, Math.min(512, wx)), Math.max(0, Math.min(512, wz)))) {
+        e.preventDefault();
+        return;
+      }
+    }
     if (store.tool === 'height') {
       beginStroke(wx / 8, wz / 8, e.altKey);
       e.preventDefault();

@@ -206,11 +206,29 @@ def catalogs():
     # extra-list catalog = STATICS.BIN (188 records, proper names)
     statics = {}
     sd = open(os.path.join(BIND, "0953/STATICS.BIN"), "rb").read()
-    for i in range(int.from_bytes(sd[4:8], "little")):
+    scnt = int.from_bytes(sd[4:8], "little")
+    for i in range(scnt):
         statics[i] = sd[0xc + i * 0x40: 0xc + i * 0x40 + 0x20] \
             .split(b"\0")[0].decode("latin-1").strip()
     out["statics"] = statics
     out["extraVanilla"] = [113, 116, 117, 121, 122, 123, 124, 125, 127, 128, 129, 133]
+
+    # turret type -> global model DAT entry. Each record stores resource
+    # pairs (count @+0x2c, start @+0x30 into the 8B-pair table after the
+    # records); the turret resource ids in ascending order map 1:1 onto the
+    # TURRET* model entries 1150-1165 (calibrated on the model names:
+    # Cannon->TURRET1, Gatling->G, Ice->I, Laser->L, Homing->H/AH...).
+    tail = 12 + scnt * 64
+    tres = {}
+    for i in range(scnt):
+        if not statics[i].startswith("Turret"):
+            continue
+        n, start = struct.unpack_from("<2I", sd, 12 + i * 64 + 0x2c, )
+        if n == 1:
+            tres[i] = struct.unpack_from("<H", sd, tail + start * 8)[0]
+    order = sorted(set(tres.values()))
+    out["staticModels"] = {i: 1150 + order.index(r) for i, r in tres.items()
+                          if order.index(r) < 16}
 
     # toy names (DAT entry 0015 = English): string i+1 = toy i
     toys = {}

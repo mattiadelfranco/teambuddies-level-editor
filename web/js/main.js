@@ -5,6 +5,7 @@ import { initUI, setViewButtons, setTool } from './ui.js';
 import { deleteSel } from './items.js';
 import { brush, strokeActive } from './terrain.js';
 import * as TL from './tiles.js';
+import * as CAT from './catalog.js';
 
 // repainting the 3D ground texture is ~10ms: throttle during paint drags
 let composeTimer = 0;
@@ -66,7 +67,8 @@ async function boot() {
         e.preventDefault();
       }
     } else if (e.key === 'Escape') {
-      if (store.sel) store.apply(s => { s.sel = null; }, 'select');
+      if (CAT.pending) CAT.cancel();
+      else if (store.sel) store.apply(s => { s.sel = null; }, 'select');
       else if (store.tool !== 'select') setTool('select');
     } else if (e.key === 'v' || e.key === 'V') setTool('select');
     else if (e.key === 'h' || e.key === 'H') setTool('height');

@@ -97,30 +97,34 @@ export function heightAt(tx, tz) {
 }
 
 // ---- mutations used by the Catalog (call via store.apply) ----
+// wx/wz are optional canvas-world coordinates (512 units); default = center.
 
-export function addUnit(type, team) {
+export function addUnit(type, team, wx, wz) {
   const st = store.ed;
-  st.s6.records.push([type, team, 0, 0, 0]);        // raw (0,0) = map center
+  st.s6.records.push([type, team, 0,
+    wx !== undefined ? w2raw(wx) : 0, wz !== undefined ? w2raw(wz) : 0]);
   store.sel = { k: 's6', i: st.s6.records.length - 1 };
 }
 
-export function addObject(modelIdx) {
+export function addObject(modelIdx, wx, wz) {
   const st = store.ed;
   const tpl = st.inst.find(r => r[0] === modelIdx);
   const r = tpl ? tpl.slice() : [modelIdx, 0, 0, 0, 0, 0, 0];
-  if (!tpl && st.inst.length) {
-    const hs = st.inst.map(q => q[2]).sort((a, b) => a - b);
-    r[2] = hs[hs.length >> 1];
-  }
-  r[1] = 256; r[3] = 256;                           // map center (tile 32,32)
+  r[1] = wx !== undefined ? Math.round(wx) : 256;
+  r[3] = wz !== undefined ? Math.round(512 - wz) : 256;
+  // snap the altitude to the terrain (vanilla objects sit exactly on it)
+  r[2] = Math.round(heightAt(r[1] / 8, (512 - r[3]) / 8) * 8);
   st.inst.push(r);
   store.sel = { k: 'in', i: st.inst.length - 1 };
   return !!tpl;
 }
 
-export function addExtra(type) {
+export function addExtra(type, team = 0, wx, wz) {
   const st = store.ed;
-  st.extra.push([0, 0, 256, 16, 256, type, 0, 512, 0, 0]);
+  st.extra.push([0, 0,
+    wx !== undefined ? Math.round(wx) & 0xffff : 256, 16,
+    wz !== undefined ? Math.round(512 - wz) & 0xffff : 256,
+    type, 0, 512, team, 0]);
   store.sel = { k: 'tr', i: st.extra.length - 1 };
 }
 

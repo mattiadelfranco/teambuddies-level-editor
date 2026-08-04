@@ -6,11 +6,18 @@ async function j(url, opts) {
   return body;
 }
 
+const cache = new Map();
+function cached(url) {
+  if (!cache.has(url)) cache.set(url, j(url).catch(e => { cache.delete(url); throw e; }));
+  return cache.get(url);
+}
+
 export const api = {
   levels: () => j('/api/levels'),
   catalogs: () => j('/api/catalogs'),
   level: entry => j('/api/level/' + entry),
-  models3d: entry => j('/api/3d/' + entry),
+  models3d: entry => cached('/api/3d/' + entry),
+  global3d: dat => cached('/api/global3d/' + dat),
   groundUrl: entry => '/ground3d/' + entry + '.png?v=' + Date.now(),
   save: (entry, edits) => j('/api/save', { method: 'POST', body: JSON.stringify({ entry, edits }) }),
   build: () => j('/api/build', { method: 'POST', body: '{}' }),

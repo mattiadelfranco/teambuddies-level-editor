@@ -108,33 +108,26 @@
     </section>
 
     <section id="tab-catalog" class="tab">
-      <h3>Unit (s6)</h3>
-      <div class="row">
-        <select id="cat-s6"></select>
-        <select id="cat-s6team">
-          <option value="0">team 1</option><option value="1">team 2</option>
-          <option value="2">team 3</option><option value="3">team 4</option>
-        </select>
-        <button id="cat-addunit">Add</button>
-      </div>
-      <h3>Level object (instance)</h3>
-      <div class="row">
-        <select id="cat-mdl"></select>
-        <button id="cat-addobj">Add</button>
-      </div>
-      <h3>Turret / static (extra list)</h3>
-      <div class="row">
-        <select id="cat-extra"></select>
-        <button id="cat-addextra">Add</button>
-      </div>
-      <div class="row">
-        <button id="cat-defenses" title="Two turrets of the selected type around every base, owner's team">🛡 Base defenses</button>
-      </div>
+      <input id="cat-search" type="text" placeholder="🔍 Search objects…" style="width:100%">
+      <div class="hint">Click an item, then click the map (2D or 3D) to place
+        it. Esc cancels.</div>
       <h3>Structure</h3>
       <div class="row">
-        <button id="cat-addteam" title="New s0 pad + cloned base + flag. The effective team count is capped by the mission config (Level tab).">➕ Team (pad+base)</button>
+        <button id="cat-addteam" title="New s0 pad + cloned base + flag. The effective team count is capped by the mission config (Level tab).">➕ Team</button>
         <button id="cat-addzone" title="New crate-launch zone (delivery always goes to the nearest zone)">📦 Crate zone</button>
+        <button id="cat-defenses" title="Two turrets of the armed type (or Gatling Auto) around every base, owner's team">🛡 Defenses</button>
       </div>
+      <h3>Units (s6) — team <select id="cat-s6team">
+          <option value="0">1</option><option value="1">2</option>
+          <option value="2">3</option><option value="3">4</option></select></h3>
+      <div id="cat-units" class="grid-cat"></div>
+      <h3>Level objects (instances)</h3>
+      <div id="cat-models" class="grid-cat"></div>
+      <h3>Turrets &amp; statics — team <select id="cat-trteam">
+          <option value="0">auto</option><option value="1">1 (P1)</option>
+          <option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option></select></h3>
+      <div id="cat-statics" class="grid-cat"></div>
       <div id="cat-note" class="hint"></div>
     </section>
 

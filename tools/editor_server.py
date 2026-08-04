@@ -585,29 +585,21 @@ def apply_edits(entry, edits):
 _3D_CACHE = {}
 
 
-def api_3d(entry):
-    """Dati 3D del livello per l'editor: mesh dei modelli (MDL.BND, formato .LOD
-    reversato - vedi tb_lod.py) + texture (TIM.BND) + URL del terreno hi-res.
-    I modelli non cambiano coi mods -> cache in memoria per entry."""
-    if entry in _3D_CACHE:
-        return _3D_CACHE[entry]
-    folder = os.path.join(BIND, entry)
+def _build_3d(model_files, tim_files):
+    """JSON mesh+texture dal formato .LOD/.TIM: liste di (nome, bytes)."""
     out = {"models": {}, "tex": {}}
     timsz = {}
-    tim_path = os.path.join(folder, "TIM.BND")
-    if os.path.exists(tim_path):
-        for name, data in tb_lod.parse_bind(open(tim_path, "rb").read()):
-            key = name.upper().rsplit(".", 1)[0]
-            try:
-                w, h, _ = tb_lod.tim_to_rgba(data)
-                timsz[key] = (w, h)
-                out["tex"][key] = "data:image/png;base64," + \
-                    base64.b64encode(tb_lod.tim_to_png(data)).decode()
-            except Exception:
-                pass
-    mdl_path = os.path.join(folder, "MDL.BND")
-    if os.path.exists(mdl_path):
-        for name, data in tb_lod.parse_bind(open(mdl_path, "rb").read()):
+    for name, data in tim_files:
+        key = name.upper().rsplit(".", 1)[0]
+        try:
+            w, h, _ = tb_lod.tim_to_rgba(data)
+            timsz[key] = (w, h)
+            out["tex"][key] = "data:image/png;base64," + \
+                base64.b64encode(tb_lod.tim_to_png(data)).decode()
+        except Exception:
+            pass
+    if True:
+        for name, data in model_files:
             key = name.upper().rsplit(".", 1)[0]
             try:
                 m = tb_lod.parse_lod(data)
@@ -645,7 +637,42 @@ def api_3d(entry):
                                         "c": list(part["color"]), "p": P, "n": N, "u": U})
             if batches:
                 out["models"][key] = batches
+    return out
+
+
+def api_3d(entry):
+    """Dati 3D del livello per l'editor: mesh dei modelli (MDL.BND, formato .LOD
+    reversato - vedi tb_lod.py) + texture (TIM.BND). Cache in memoria."""
+    if entry in _3D_CACHE:
+        return _3D_CACHE[entry]
+    folder = os.path.join(BIND, entry)
+    models, tims = [], []
+    tim_path = os.path.join(folder, "TIM.BND")
+    if os.path.exists(tim_path):
+        tims = list(tb_lod.parse_bind(open(tim_path, "rb").read()))
+    mdl_path = os.path.join(folder, "MDL.BND")
+    if os.path.exists(mdl_path):
+        models = list(tb_lod.parse_bind(open(mdl_path, "rb").read()))
+    out = _build_3d(models, tims)
     _3D_CACHE[entry] = out
+    return out
+
+
+def api_global3d(dat):
+    """Modello GLOBALE (entry DAT tipo 1150-1165 TURRET*): la cartella
+    bind/<dat> estratta contiene .LOD e .TIM sciolti. Ritorna lo stesso JSON
+    di api_3d (i proiettili P_* vengono saltati)."""
+    key = "g" + dat
+    if key in _3D_CACHE:
+        return _3D_CACHE[key]
+    folder = os.path.join(BIND, dat)
+    models = [(f, open(os.path.join(folder, f), "rb").read())
+              for f in sorted(os.listdir(folder))
+              if f.endswith(".LOD") and not f.startswith("P_")]
+    tims = [(f, open(os.path.join(folder, f), "rb").read())
+            for f in sorted(os.listdir(folder)) if f.endswith(".TIM")]
+    out = _build_3d(models, tims)
+    _3D_CACHE[key] = out
     return out
 
 
@@ -747,6 +774,14 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "unknown level"}, 404)
             try:
                 return self._json(tb_level.atlas(entry))
+            except Exception as e:
+                return self._json({"err": str(e)}, 500)
+        if self.path.startswith("/api/global3d/"):
+            dat = self.path.split("/")[-1].split("?")[0]
+            if not (dat.isdigit() and os.path.isdir(os.path.join(BIND, dat))):
+                return self._json({"err": "unknown entry"}, 404)
+            try:
+                return self._json(api_global3d(dat))
             except Exception as e:
                 return self._json({"err": str(e)}, 500)
         if self.path.startswith("/api/3d/"):

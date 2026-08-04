@@ -7,6 +7,7 @@ import { items, moveItem, heightAt } from './items.js';
 import { api, b64u8 } from './api.js';
 import { brush, beginStroke, moveStroke, endStroke, strokeActive } from './terrain.js';
 import * as TL from './tiles.js';
+import * as CAT from './catalog.js';
 
 const TCOLS = [[231, 76, 60], [52, 152, 219], [46, 204, 113], [241, 196, 15],
   [155, 89, 182], [230, 126, 34], [26, 188, 156], [149, 165, 166]];
@@ -36,6 +37,7 @@ export function gameCam() { E3.cam.yaw = Math.PI; E3.cam.pitch = 0.85; saveCam()
 // ---------------------------------------------------------------- setup ----
 export function init3d(canvas, statusPos) {
   E3.cv = canvas; E3.statusPos = statusPos;
+  window.E3D = E3;              // debug handle (console)
   const gl = canvas.getContext('webgl', { antialias: true });
   E3.gl = gl;
   const vs = `attribute vec3 aP;attribute vec3 aN;attribute vec2 aU;
@@ -152,20 +154,44 @@ export function load() {
       im.src = uri;
     }
     E3.models = {};
-    for (const [name, batches] of Object.entries(jd.models)) {
-      E3.models[name] = batches.map(b => {
-        const n = b.p.length / 3, arr = new Float32Array(n * 8);
-        for (let i = 0; i < n; i++)
-          arr.set([b.p[3 * i], b.p[3 * i + 1], b.p[3 * i + 2],
-                   b.n[3 * i], b.n[3 * i + 1], b.n[3 * i + 2],
-                   b.u[2 * i], b.u[2 * i + 1]], i * 8);
-        const vbo = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-        gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
-        return { vbo, n, tex: b.t, col: [b.c[0] / 128, b.c[1] / 128, b.c[2] / 128, 1] };
-      });
-    }
+    for (const [name, batches] of Object.entries(jd.models))
+      E3.models[name] = buildBatches(batches);
   }).catch(() => store.say('3D models unavailable (is the server running?)'));
+}
+
+function buildBatches(batches) {
+  const gl = E3.gl;
+  return batches.map(b => {
+    const n = b.p.length / 3, arr = new Float32Array(n * 8);
+    for (let i = 0; i < n; i++)
+      arr.set([b.p[3 * i], b.p[3 * i + 1], b.p[3 * i + 2],
+               b.n[3 * i], b.n[3 * i + 1], b.n[3 * i + 2],
+               b.u[2 * i], b.u[2 * i + 1]], i * 8);
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
+    return { vbo, n, tex: b.t, col: [b.c[0] / 128, b.c[1] / 128, b.c[2] / 128, 1] };
+  });
+}
+
+// global models (turrets): lazy per-DAT-entry cache shared by all levels
+const GLB = { meshes: new Map(), texs: new Map(), loading: new Set() };
+function globalMesh(dat) {
+  if (GLB.meshes.has(dat)) return GLB.meshes.get(dat);
+  if (!GLB.loading.has(dat)) {
+    GLB.loading.add(dat);
+    api.global3d(String(dat)).then(j => {
+      for (const [name, uri] of Object.entries(j.tex || {})) {
+        if (GLB.texs.has(name)) continue;
+        const im = new Image();
+        im.onload = () => { GLB.texs.set(name, tex(im)); };
+        im.src = uri;
+      }
+      const first = Object.values(j.models)[0];
+      if (first) GLB.meshes.set(dat, buildBatches(first));
+    }).catch(() => {});
+  }
+  return null;
 }
 
 export function reload() { E3.entry = null; if (E3.on) load(); }
@@ -406,8 +432,18 @@ function render() {
     } else if (it.k === 'tr') {
       // spawn yaw = (-rot)^0x800 -> rot+0x800 in our Y-up frame
       const yaw = (((it.rot & 4095) + 2048) & 4095) / 4096 * 6.2832;
-      drawMesh(E3.gizmo.cyl, it.tx, heightAt(it.tx, it.tz), it.tz, yaw,
-        [0, 0.82, 0.83, isSel ? 1 : 0.85], null, true);
+      const y = heightAt(it.tx, it.tz);
+      const type = store.ed.extra ? store.ed.extra[it.i][5] : -1;
+      const dat = store.cat.staticModels && store.cat.staticModels[type];
+      const gm = dat ? globalMesh(dat) : null;
+      if (gm) {
+        for (const b of gm)
+          drawMesh(b, it.tx, y, it.tz, yaw, b.col, b.tex ? GLB.texs.get(b.tex) : null, true);
+        if (isSel) drawMesh(E3.gizmo.cyl, it.tx, y, it.tz, 0, [0, 0.82, 0.83, 0.3], null, false);
+      } else {
+        drawMesh(E3.gizmo.cyl, it.tx, y, it.tz, yaw,
+          [0, 0.82, 0.83, isSel ? 1 : 0.85], null, true);
+      }
     }
   }
   // extra PLD sections as small colored cones
@@ -492,6 +528,12 @@ function input() {
     sx = mx; sy = my; moved = 0;
     if (e.button === 1 || e.shiftKey) { mode = 'pan'; return; }
     if (e.button === 2) { mode = 'orbit'; return; }
+    if (CAT.pending) {
+      const g = groundHit(mx, my, c.clientWidth, c.clientHeight);
+      if (g && isFinite(g[0]))
+        CAT.placeAt(Math.max(0, Math.min(512, g[0] * 8)), Math.max(0, Math.min(512, g[1] * 8)));
+      return;
+    }
     if (store.tool === 'height') {
       const g = groundHit(mx, my, c.clientWidth, c.clientHeight);
       if (g) {

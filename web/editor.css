@@ -28,6 +28,21 @@ body {
 #pl-stamp { width: 48px; height: 48px; image-rendering: pixelated;
   border: 1px solid #3a3f4a; border-radius: 4px; background: #000; }
 
+/* ---- catalog grid ---- */
+.grid-cat { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.cat-item {
+  cursor: pointer; border: 1px solid #2a2e36; border-radius: 6px;
+  padding: 3px; text-align: center; background: #202430;
+}
+.cat-item:hover { border-color: #3b82f6; }
+.cat-item.on { outline: 2px solid #3b82f6; }
+.cat-item img { width: 100%; aspect-ratio: 1; object-fit: contain;
+  border-radius: 4px; background: #14161a; }
+.cat-item div {
+  font-size: 10px; color: #aab; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; margin-top: 2px;
+}
+
 /* ---- main area ---- */
 #body { flex: 1; display: flex; min-height: 0; }
 #tools {

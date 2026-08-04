@@ -4,6 +4,7 @@ import * as It from './items.js';
 import { modelColor } from './view2d.js';
 import { brush } from './terrain.js';
 import * as TL from './tiles.js';
+import * as CAT from './catalog.js';
 
 const $ = id => document.getElementById(id);
 const isAuto = name => /auto/i.test(name || '');
@@ -156,30 +157,11 @@ export function initUI(onViewMode) {
   for (const k of ['ground', 'hm', 'pth', 'obj'])
     $('ly-' + k).onchange = e => store.apply(s => { s.view.layers[k] = e.target.checked; }, 'layers');
 
-  // catalog static parts
-  $('cat-s6').innerHTML = store.cat.s6Names
-    .map((n, i) => `<option value="${i}">${i} — ${n}</option>`).join('');
-  fillExtraSelect();
-  $('cat-addunit').onclick = () =>
-    store.apply(() => It.addUnit(+$('cat-s6').value, +$('cat-s6team').value));
-  $('cat-addobj').onclick = () => {
-    const m = +$('cat-mdl').value;
-    const name = store.lvl.models[m] || m;
-    if (!store.ed.inst.find(r => r[0] === m)
-        && !confirm(`No instance of "${name}" in this level: adding with default params (e=0) may misbehave. Continue?`)) return;
-    store.apply(() => It.addObject(m));
-  };
-  $('cat-addextra').onclick = () => {
-    if (!store.ed.extra) return store.say('extra list not decodable for this level — left untouched');
-    const t = +$('cat-extra').value;
-    const nm = store.cat.statics[t] || '?';
-    if (!store.cat.extraVanilla.includes(t) && !/^Turret/i.test(nm)
-        && !confirm(`"${nm}" is never placed via the extra list in vanilla levels: untested in game. Continue?`)) return;
-    store.apply(() => It.addExtra(t));
-  };
+  // catalog (grid + place mode in catalog.js)
+  $('cat-search').oninput = () => CAT.filter();
   $('cat-defenses').onclick = () => {
     if (!store.ed.extra) return store.say('extra list not decodable for this level');
-    let t = +$('cat-extra').value;
+    let t = CAT.pending && CAT.pending.kind === 'tr' ? CAT.pending.id : 117;
     if (!/^Turret/i.test(store.cat.statics[t] || '')) t = 117;   // Gatling (Auto)
     let n = 0;
     store.apply(() => { n = It.addDefenses(t); });
@@ -249,22 +231,10 @@ function syncViewControls() {
   for (const k of ['ground', 'hm', 'pth', 'obj']) $('ly-' + k).checked = store.view.layers[k];
 }
 
-function fillExtraSelect() {
-  const s = $('cat-extra'), cat = store.cat;
-  const keys = Object.keys(cat.statics).map(Number).sort((a, b) => a - b);
-  const opt = t => `<option value="${t}">${t} — ${cat.statics[t] || '?'}${cat.extraVanilla.includes(t) ? ' ✓' : ''}</option>`;
-  const grp = (label, filter) =>
-    `<optgroup label="${label}">${keys.filter(filter).map(opt).join('')}</optgroup>`;
-  s.innerHTML =
-    grp('Enterable turrets', t => /^Turret/i.test(cat.statics[t]) && !isAuto(cat.statics[t]))
-    + grp('Auto turrets (fire at everyone!)', t => /^Turret/i.test(cat.statics[t]) && isAuto(cat.statics[t]))
-    + grp('Statics (trees / rocks / buildings / powerups…)', t => !/^Turret/i.test(cat.statics[t]));
-}
-
 // ---- per-level refresh ----
 function onLevel() {
   const l = store.lvl;
-  $('cat-mdl').innerHTML = l.models.map((n, i) => `<option value="${i}">${n || '#' + i}</option>`).join('');
+  CAT.rebuild();
   $('cat-note').textContent = store.ed.extra ? '' :
     '⚠ extra list not decodable for this level: turret editing disabled, data left untouched.';
   const tc = store.ed.tcount;
@@ -356,11 +326,21 @@ function refreshInspector() {
     $('if-team').onchange = e => store.apply(s => { s.ed.s6.records[sel.i][1] = +e.target.value; });
   } else if (sel.k === 'tr') {
     const r = st.extra[sel.i], f8 = r[8] || 0;
+    const deg = Math.round((r[7] & 0xfff) / 4096 * 360);
     F.innerHTML = `<div class="row"><label>Team</label><select id="if-trteam">
       <option value="0">auto (vanilla)</option>${[1, 2, 3, 4]
         .map(n => `<option value="${n}"${f8 === n ? ' selected' : ''}>team ${n}${n === 1 ? ' (P1)' : ''}</option>`).join('')}
-      </select></div>`;
+      </select></div>
+      <div class="row"><label>Rotation</label>
+      <input id="if-rot" type="number" value="${deg}" step="45" style="width:60px">°
+      <button id="if-rotl">−90°</button><button id="if-rotr">+90°</button></div>`;
     $('if-trteam').onchange = e => store.apply(s => { s.ed.extra[sel.i][8] = +e.target.value; });
+    const setRot = d => store.apply(s => {
+      s.ed.extra[sel.i][7] = Math.round(((d % 360 + 360) % 360) / 360 * 4096) & 0xfff;
+    });
+    $('if-rot').onchange = e => setRot(+e.target.value || 0);
+    $('if-rotl').onclick = () => setRot(Math.round((st.extra[sel.i][7] & 0xfff) / 4096 * 360) - 90);
+    $('if-rotr').onclick = () => setRot(Math.round((st.extra[sel.i][7] & 0xfff) / 4096 * 360) + 90);
     if (f8 > 0) note.textContent = `TEAM ${f8} FORCED (via ENG patch).`;
     else if (isAuto(store.cat.statics[r[5]]))
       note.textContent = '⚠ AUTO turret without a team: in practice hostile to the player — set a team above.';
@@ -371,14 +351,25 @@ function refreshInspector() {
     }
   } else if (sel.k === 'in') {
     const r = st.inst[sel.i];
+    const deg = Math.round(((r[5] >>> 16) & 0xfff) / 4096 * 360);
     F.innerHTML = `<div class="row"><label>Altitude</label>
       <input id="if-alt" type="number" value="${r[2]}" style="width:70px">
       <button id="if-snap" title="set altitude to the terrain height under the object">Snap to ground</button></div>
-      <div class="hint">rot r1=0x${(r[5] >>> 0).toString(16)} · e-param ${r[4]}</div>`;
+      <div class="row"><label>Rotation</label>
+      <input id="if-rot" type="number" value="${deg}" step="45" style="width:60px">°
+      <button id="if-rotl">−90°</button><button id="if-rotr">+90°</button></div>
+      <div class="hint">e-param ${r[4]} · r1 0x${(r[5] >>> 0).toString(16)}</div>`;
     $('if-alt').onchange = e => store.apply(s => { s.ed.inst[sel.i][2] = +e.target.value | 0; });
     $('if-snap').onclick = () => store.apply(s => {
       s.ed.inst[sel.i][2] = Math.round(It.heightAt(it.x / 8, it.z / 8) * 8);
     });
+    const setRot = d => store.apply(s => {
+      const raw = Math.round(((d % 360 + 360) % 360) / 360 * 4096) & 0xfff;
+      s.ed.inst[sel.i][5] = ((raw << 16) | (s.ed.inst[sel.i][5] & 0xffff)) | 0;
+    });
+    $('if-rot').onchange = e => setRot(+e.target.value || 0);
+    $('if-rotl').onclick = () => setRot(Math.round(((st.inst[sel.i][5] >>> 16) & 0xfff) / 4096 * 360) - 90);
+    $('if-rotr').onclick = () => setRot(Math.round(((st.inst[sel.i][5] >>> 16) & 0xfff) / 4096 * 360) + 90);
   } else if (sel.k === 'cz') {
     const c = st.zcfg[sel.i];
     F.innerHTML = `<div class="hint">Crates: ${zoneCfgName(c)}</div>
