@@ -106,6 +106,11 @@ def parse_extra(folder):
             r1, r2 = struct.unpack_from("<2i", d, oo + 12)
             inst.append([m, x, h, z, e, r1, r2])
         out["inst"] = inst
+        # heightmap del PND moddato (dopo la lista extra): il terreno 3D e la
+        # quota dei gizmo devono riflettere gli spianamenti delle pedane
+        import base64 as _b64
+        hm_off = o + 2 + cnt * 20
+        out["hm"] = _b64.b64encode(d[hm_off: hm_off + 65 * 65 * 2]).decode()
     return out
 
 
@@ -230,7 +235,8 @@ let edMode=false, edStates={}, edSel=null, edDrag=false, edDirty=false;
 ED_DATA.forEach(e=>{const l=LV.find(x=>x.entry===e.entry);
   if(!l)return;
   if(e.s0&&l.pld[0])l.pld[0].pts=e.s0.map(r=>r.slice());
-  if(e.inst)l.inst=e.inst.map(r=>r.slice());});
+  if(e.inst)l.inst=e.inst.map(r=>r.slice());
+  if(e.hm)l.hm=e.hm;});
 
 function edState(){
   const l=LV[cur], x=ED_DATA.find(e=>e.entry===l.entry);
@@ -259,16 +265,20 @@ function edItems(){
     lbl:'zona casse '+(i+1)+' (consegna alla zona più vicina)',col:'#ff9f1a'}));
   st.s6.records.forEach((r,i)=>out.push({k:'s6',i,x:h2wx(r[3]),z:h2wy(r[4]),
     lbl:(ED_NAMES[r[0]]||('tipo '+r[0]))+` (team ${r[1]+1})`,col:'#f9ca24'}));
-  if(st.extra)st.extra.forEach((r,i)=>out.push({k:'tr',i,x:r[2]+18,z:512-r[4],lbl:edTrName(r[5]),col:'#00d2d3'}));
-  st.inst.forEach((it,i)=>out.push({k:'in',i,x:W+eTX()-it[1],z:it[3],
+  // istanze PND e torrette extra: STESSA trasformazione (dal parser del motore
+  // FUN_800a7fbc: wx=64x-0x4000, wz=0x4000-64z; tile=(w+0x4000)/512) =>
+  // canvas (x, 512-z). Niente specchi diversi ne' tarature empiriche.
+  if(st.extra)st.extra.forEach((r,i)=>out.push({k:'tr',i,x:r[2],z:512-r[4],lbl:edTrName(r[5]),col:'#00d2d3'}));
+  st.inst.forEach((it,i)=>out.push({k:'in',i,x:it[1],z:512-it[3],
     lbl:l.models[it[0]]||('#'+it[0]),col:'#a29bfe',small:true}));
   return out;
 }
 function edSelect(k,i){edSel=edItems().find(o=>o.k===k&&o.i===i)||null;}
 // proprieta' degli oggetti extra (da FUN_800a8780 ENG): al caricamento l'oggetto
 // prende il team della BASE piu' vicina; ogni pedana i reclama (in ordine,
-// esclusivo) la base piu' vicina NELLO SPAZIO-V del motore:
-// V_base=(x_inst/8, 64-z_inst/8) in tile, pad = tile s0 (verificato da savestate).
+// esclusivo) la base piu' vicina nello spazio tile del motore:
+// V_base=(x_inst/8, 64-z_inst/8) (dal parser FUN_800a7fbc + query FUN_800a79f4,
+// confermato dal savestate del test 5-team), pad = tile s0.
 function edVinst(r){return {x:r[1]/8, z:64-r[3]/8};}
 function edPadTile(p){return {x:32+tos16e(p[0])/512, z:32+tos16e(p[1])/512};}
 function edOwner(it){
@@ -281,17 +291,15 @@ function edOwner(it){
     for(const b of bases){if(taken.has(b.i))continue;
       const d=(b.v.x-pt.x)**2+(b.v.z-pt.z)**2;if(d<bd){bd=d;bb=b;}}
     if(bb){taken.add(bb.i);claimed.push({team:ti,base:bb});}});
-  // l'oggetto extra (spazio dati non specchiato: coord marker) -> base piu' vicina in V?
-  // gli oggetti extra vivono nello stesso spazio-V delle istanze: V_extra=(x_dato/8... )
-  // per l'anteprima usiamo la distanza in spazio-V con la posizione marker convertita
-  const itv={x:(it.x-eTX())/8, z:(it.z-eTY())/8};
+  // marker (x, 512-z) -> V=(x/8, 64-z/8) = (marker.x/8, marker.z/8)
+  const itv={x:it.x/8, z:it.z/8};
   let best=null,bd=1/0;
   for(const c of claimed){
     const d=(c.base.v.x-itv.x)**2+(c.base.v.z-itv.z)**2;
     if(d<bd){bd=d;best=c;}}
   if(best){ // per il disegno della linea: posizione marker della base
     const r=st.inst[best.base.i];
-    best.base={i:best.base.i, x:W+eTX()-r[1], z:r[3]};
+    best.base={i:best.base.i, x:r[1], z:W-r[3]};
   }
   return best;
 }
@@ -348,8 +356,8 @@ function applyMove(it,wx,wz){
   else if(it.k==='cz'){st.s3[it.i][0]=Math.max(4,Math.min(59,Math.round((wx-eTX())/8)));
     st.s3[it.i][1]=Math.max(4,Math.min(59,Math.round((wz-eTY())/8)));}
   else if(it.k==='s6'){st.s6.records[it.i][3]=w2hx(wx);st.s6.records[it.i][4]=w2hy(wz);}
-  else if(it.k==='tr'){st.extra[it.i][2]=Math.round(wx-18)&0xffff;st.extra[it.i][4]=Math.round(512-wz)&0xffff;}
-  else if(it.k==='in'){st.inst[it.i][1]=Math.round(W+eTX()-wx);st.inst[it.i][3]=Math.round(wz);}
+  else if(it.k==='tr'){st.extra[it.i][2]=Math.round(wx)&0xffff;st.extra[it.i][4]=Math.round(512-wz)&0xffff;}
+  else if(it.k==='in'){st.inst[it.i][1]=Math.round(wx);st.inst[it.i][3]=Math.round(512-wz);}
   edDirty=true;edStatus();
 }
 cv.addEventListener('mousedown',e=>{
@@ -507,7 +515,7 @@ function edAddObj(){
     const hs=st.inst.map(q=>q[2]).sort((a,b)=>a-b);r[2]=hs[hs.length>>1];
     if(!confirm('Nessuna istanza di "'+(l.models[m]||m)+'" nel livello: la aggiungo con parametri di default (e=0), potrebbe comportarsi male. Continuo?'))return;
   }
-  r[1]=256+eTX();r[3]=256;                        // vicino al centro
+  r[1]=256;r[3]=256;                              // centro mappa (tile 32,32)
   st.inst.push(r);
   edSelect('in',st.inst.length-1);
   edDirty=true;edStatus();draw();
@@ -553,7 +561,7 @@ function edAddDefenses(){
     if(!bb||done.has(bb.i))continue;
     done.add(bb.i);
     for(const [dx,dz] of [[28,-28],[-28,28]]){
-      st.extra.push([0,0,Math.round(bb.x+dx-18)&0xffff,16,Math.round(512-(bb.z+dz))&0xffff,tipo,0,512,s.i+1,0]);
+      st.extra.push([0,0,Math.round(bb.x+dx)&0xffff,16,Math.round(512-(bb.z+dz))&0xffff,tipo,0,512,s.i+1,0]);
       n++;
     }
   }
@@ -737,10 +745,14 @@ ED3JS = r"""
 // ============== VISTA 3D ==============
 (function(){
 const TCOLS=[[231,76,60],[52,152,219],[46,204,113],[241,196,15],[155,89,182],[230,126,34],[26,188,156],[149,165,166]];
+// Scala verticale DEL MOTORE (da Ghidra): FUN_800a9744 espande la heightmap a
+// h_mondo = -64*h_file e il parser istanze usa wy = -64*alt (stessa unita');
+// con 512 unita' mondo per tile la quota in tile e' h/8 (positivo = su).
+const HDIV=8;
 const ED3={on:false,gl:null,cv:null,entry:null,lvl:null,terr:null,models:null,texs:{},ground:null,
   cam:{yaw:parseFloat(localStorage.ed3yaw||'2.356'),pitch:parseFloat(localStorage.ed3pitch||'0.85'),
        dist:parseFloat(localStorage.ed3dist||'46'),tx:32,tz:32},
-  hdiv:parseInt(localStorage.ed3hdiv||'512'),drag:null,last:null,msg:'',raf:0};
+  drag:null,last:null,msg:'',raf:0};
 window.ED3=ED3;   // handle di debug (console)
 
 // ---------- UI ----------
@@ -750,19 +762,13 @@ window.ED3=ED3;   // handle di debug (console)
   <div id="ed3bar" style="display:none;gap:6px;flex-wrap:wrap;margin:4px 0;align-items:center">
     <button id="e3_rotl" title="ruota vista a sinistra">⟲</button>
     <button id="e3_rotr" title="ruota vista a destra">⟳</button>
-    <select id="e3_h" title="scala verticale del terreno">
-      <option value="512">quota /512</option><option value="256">quota /256</option>
-      <option value="128">quota /128</option><option value="64">quota /64</option></select>
     <span style="color:#8b93a1;font-size:11px">trascina: ruota · shift/tasto centrale: sposta · rotella: zoom · click su un marker: seleziona e trascina</span>
   </div>`;
   const side=document.getElementById('side');
   side.insertBefore(div,side.children[1]);
-  document.getElementById('e3_h').value=String(ED3.hdiv);
   document.getElementById('ck_3d').onchange=e=>{ed3Toggle(e.target.checked)};
   document.getElementById('e3_rotl').onclick=()=>{ED3.cam.yaw+=Math.PI/2;ed3SaveCam()};
   document.getElementById('e3_rotr').onclick=()=>{ED3.cam.yaw-=Math.PI/2;ed3SaveCam()};
-  document.getElementById('e3_h').onchange=e=>{ED3.hdiv=+e.target.value;localStorage.ed3hdiv=e.target.value;
-    if(ED3.lvl)ed3BuildTerrain();};
 }
 function ed3SaveCam(){localStorage.ed3yaw=ED3.cam.yaw;localStorage.ed3pitch=ED3.cam.pitch;localStorage.ed3dist=ED3.cam.dist;}
 
@@ -884,8 +890,12 @@ function ed3Tex(img,ground){
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,ground?gl.LINEAR:gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,ground?gl.LINEAR:gl.NEAREST);
+  // NEAREST secco in mag E min, niente mipmap: la PSX campiona a texel secco.
+  // Col bilineare/trilineare i bordi "sbavano" (erba spalmata sui muri ripidi,
+  // sentieri sfocati) perche' alla distanza tipica il terreno e' minificato e
+  // il trilineare fonde i mip.
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
   return t;
 }
 function ed3BuildTerrain(){
@@ -893,10 +903,16 @@ function ed3BuildTerrain(){
   const hm=b64i16(l.hm);
   ED3.hm=hm;
   const P=new Float32Array(65*65*8);
+  const H=(i,j)=>hm[Math.max(0,Math.min(64,j))*65+Math.max(0,Math.min(64,i))]/HDIV;
   for(let j=0;j<=64;j++)for(let i=0;i<=64;i++){
     const o=(j*65+i)*8;
-    P[o]=i;P[o+1]=hm[j*65+i]/ED3.hdiv;P[o+2]=j;
-    P[o+3]=0;P[o+4]=1;P[o+5]=0;
+    P[o]=i;P[o+1]=H(i,j);P[o+2]=j;
+    // normali dal heightfield (differenze centrali): il motore fa lo stesso
+    // (MAP_VNORMS, FUN_800a99b4) e illumina il terreno in gouraud — senza
+    // luce le pareti restano verde pieno e sembrano "sbavature"
+    const dx=(H(i+1,j)-H(i-1,j))/2, dz=(H(i,j+1)-H(i,j-1))/2;
+    const il=1/Math.hypot(dx,1,dz);
+    P[o+3]=-dx*il;P[o+4]=il;P[o+5]=-dz*il;
     // il PNG del terreno e' NELLO STESSO spazio di s0/heightmap (riga=z, col=x):
     // verificato coi tile dipinti delle pedane (pedana A = quadrato blu a (39,38))
     P[o+6]=i/64;P[o+7]=j/64;
@@ -917,7 +933,7 @@ function hAt(tx,tz){
   const x=Math.max(0,Math.min(63.999,tx)),z=Math.max(0,Math.min(63.999,tz));
   const i=x|0,j=z|0,fx=x-i,fz=z-j;
   return (hm[j*65+i]*(1-fx)*(1-fz)+hm[j*65+i+1]*fx*(1-fz)
-         +hm[(j+1)*65+i]*(1-fx)*fz+hm[(j+1)*65+i+1]*fx*fz)/ED3.hdiv;
+         +hm[(j+1)*65+i]*(1-fx)*fz+hm[(j+1)*65+i+1]*fx*fz)/HDIV;
 }
 
 // ---------- matrici ----------
@@ -980,10 +996,9 @@ function edItems3(){
   st.s6.records.forEach((r,i)=>out.push({k:'s6',i,tx:32+tos16e(r[3])/512,tz:32+tos16e(r[4])/512,
     lbl:(ED_NAMES[r[0]]||('tipo '+r[0]))+' (team '+(r[1]+1)+')'}));
   if(st.extra)st.extra.forEach((r,i)=>out.push({k:'tr',i,tx:r[2]/8,tz:64-r[4]/8,rot:r[7],lbl:edTrName(r[5])}));
-  // istanze nello spazio tile/s0 (ancorato ai tile dipinti delle pedane,
-  // verificati in gioco): x SPECCHIATA rispetto al dato, z diretta.
-  // (le torrette sopra hanno la convenzione opposta: z specchiata)
-  st.inst.forEach((r,i)=>out.push({k:'in',i,tx:64-r[1]/8,tz:r[3]/8,alt:r[2],rot:r[5],m:r[0],
+  // istanze: STESSA trasformazione delle torrette (parser motore FUN_800a7fbc:
+  // wx=64x-0x4000, wz=0x4000-64z => tile=(x/8, 64-z/8))
+  st.inst.forEach((r,i)=>out.push({k:'in',i,tx:r[1]/8,tz:64-r[3]/8,alt:r[2],rot:r[5],m:r[0],
     lbl:l.models[r[0]]||('#'+r[0])}));
   return out;
 }
@@ -995,7 +1010,7 @@ function applyMove3(it,tx,tz){
     st.s3[it.i][1]=Math.max(4,Math.min(59,Math.round(tz)));}
   else if(it.k==='s6'){st.s6.records[it.i][3]=raw(tx);st.s6.records[it.i][4]=raw(tz);}
   else if(it.k==='tr'){st.extra[it.i][2]=Math.round(8*tx)&0xffff;st.extra[it.i][4]=Math.round(512-8*tz)&0xffff;}
-  else if(it.k==='in'){st.inst[it.i][1]=Math.round(512-8*tx);st.inst[it.i][3]=Math.round(8*tz);}
+  else if(it.k==='in'){st.inst[it.i][1]=Math.round(8*tx);st.inst[it.i][3]=Math.round(512-8*tz);}
   edDirty=true;edStatus();draw();
 }
 
@@ -1059,7 +1074,8 @@ function ed3Render(){
     gl.vertexAttribPointer(L.aP,3,gl.FLOAT,false,32,0);
     gl.vertexAttribPointer(L.aN,3,gl.FLOAT,false,32,12);
     gl.vertexAttribPointer(L.aU,2,gl.FLOAT,false,32,24);
-    gl.uniform3f(L.uT,0,0,0);gl.uniform1f(L.uRot,0);gl.uniform1f(L.uLit,0);
+    gl.uniform3f(L.uT,0,0,0);gl.uniform1f(L.uRot,0);gl.uniform1f(L.uMx,1);
+    gl.uniform1f(L.uLit,1);
     gl.uniform4f(L.uCol,1,1,1,1);
     if(ED3.ground){gl.uniform1i(L.uTexOn,1);gl.bindTexture(gl.TEXTURE_2D,ED3.ground);}
     else{gl.uniform1i(L.uTexOn,0);gl.uniform4f(L.uCol,0.22,0.28,0.2,1);}
@@ -1067,17 +1083,22 @@ function ed3Render(){
     gl.drawElements(gl.TRIANGLES,ED3.terr.n,gl.UNSIGNED_SHORT,0);
   }
   const items=edItems3();
-  // istanze: modelli reali
+  // istanze: modelli reali (nessuno specchio: il frame ora e' quello del motore).
+  // Yaw dal parser FUN_800a7fbc: angolo = u16@14 (r1>>16), 0x1000 = giro intero,
+  // con flip 0x800-rot se |s16@12| > 500; il motore memorizza -rot (Y mondo in
+  // giu'), che nel nostro frame Y-in-su torna +rot.
   for(const it of items){
     if(it.k!=='in')continue;
     const name=(ED3.lvl.models[it.m]||'').toUpperCase();
     const mesh=ED3.models&&ED3.models[name];
-    const y=(it.alt||0)/ED3.hdiv;
-    // spazio istanze specchiato in x -> geometria specchiata e rotazione invertita
-    const yaw=((it.rot>>16)/4096)*6.2832;
+    const y=(it.alt||0)/HDIV;
+    let rot=(it.rot>>>16)&0xfff;
+    const p6=(it.rot<<16)>>16;
+    if(Math.abs(p6)>500)rot=(0x800-rot)&0xfff;
+    const yaw=(rot/4096)*6.2832;
     if(mesh)for(const b of mesh)
-      ed3DrawMesh(b,it.tx,y,it.tz,yaw,b.col,b.tex?ED3.texs[b.tex]:null,true,-1);
-    else ed3DrawMesh(ED3.gizmo.box,it.tx,y,it.tz,yaw,[0.55,0.55,0.6,1],null,true,-1);
+      ed3DrawMesh(b,it.tx,y,it.tz,yaw,b.col,b.tex?ED3.texs[b.tex]:null,true,1);
+    else ed3DrawMesh(ED3.gizmo.box,it.tx,y,it.tz,yaw,[0.55,0.55,0.6,1],null,true,1);
   }
   // gizmo sopra il terreno
   for(const it of items){
@@ -1092,7 +1113,8 @@ function ed3Render(){
       ed3DrawMesh(ED3.gizmo.cone,it.tx,y,it.tz,0,[0.98,0.79,0.14,seld?1:0.85],null,true);
     }else if(it.k==='tr'){
       const y=hAt(it.tx,it.tz);
-      const yaw=(((4096-(it.rot&4095))&4095)/4096)*6.2832;
+      // spawn FUN_800a8780: yaw mondo = (-rot)^0x800 -> nel frame Y-in-su rot+0x800
+      const yaw=((((it.rot&4095)+2048)&4095)/4096)*6.2832;
       ed3DrawMesh(ED3.gizmo.cyl,it.tx,y,it.tz,yaw,[0,0.82,0.83,seld?1:0.85],null,true);
     }
   }
@@ -1129,7 +1151,7 @@ function ed3Pick(mx,my){
   const w=ED3.cv.clientWidth,h=ED3.cv.clientHeight;
   let best=null,bd=26;
   for(const it of edItems3()){
-    const y=it.k==='in'?(it.alt||0)/ED3.hdiv:hAt(it.tx,it.tz);
+    const y=it.k==='in'?(it.alt||0)/HDIV:hAt(it.tx,it.tz);
     const p=ed3Project([it.tx,y+0.4,it.tz],ED3.vp,w,h);
     if(!p)continue;
     const d=Math.hypot(p[0]-mx,p[1]-my)*(it.k==='in'?1.25:1);
@@ -1147,7 +1169,7 @@ function ed3Input(){
     if(e.button===1||e.shiftKey){mode='pan';return;}
     if(e.button===2){mode='orbit';return;}
     const it=edMode?ed3Pick(mx,my):null;
-    if(it){mode='move';ED3.drag={it,py:it.k==='in'?(it.alt||0)/ED3.hdiv:hAt(it.tx,it.tz)};
+    if(it){mode='move';ED3.drag={it,py:it.k==='in'?(it.alt||0)/HDIV:hAt(it.tx,it.tz)};
       edSelect(it.k,it.i);edStatus();draw();}
     else mode='orbit';
   });

@@ -603,9 +603,11 @@ def api_3d(entry):
 GROUNDS3D = os.path.join(ROOT, "teambudd/grounds3d")
 
 
-def ground3d_png(entry, px=32):
-    """PNG del terreno a 32px/tile (2048x2048) dal PND corrente (mods se
-    presente), cache su disco invalidata dal mtime del PND."""
+def ground3d_png(entry, px=64):
+    """PNG del terreno a 64px/tile (4096x4096, risoluzione NATIVA delle celle
+    atlas) dal PND corrente (mods se presente), cache su disco invalidata dal
+    mtime del PND. A 32px/tile i muri ripidi (texture stirata in verticale)
+    diventavano sbavature: partivano gia' da meta' risoluzione."""
     import glob as _glob
     folder = os.path.join(MODS, entry)
     if not (os.path.isdir(folder) and _glob.glob(os.path.join(folder, "*.PND"))):

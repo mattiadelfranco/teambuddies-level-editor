@@ -46,7 +46,12 @@ def parse_level(folder):
         x, h, z, e = struct.unpack_from("<4h", d, o + 4)
         r1, r2 = struct.unpack_from("<2i", d, o + 12)
         inst.append([m, x, h, z, e, r1, r2])
-    hm_off = base + n_inst * 20
+    # la heightmap viene DOPO la lista extra (torrette): u16 count + count*20B.
+    # Senza questo salto la griglia risulta slittata di 1+10*count valori
+    # (colline "sbordate" sul piano, stagni deformati, picchi dai record).
+    off_extra = base + n_inst * 20
+    extra_cnt, = struct.unpack_from("<H", d, off_extra)
+    hm_off = off_extra + 2 + extra_cnt * 20
     lvl["models"] = models
     lvl["inst"] = inst
     lvl["hm"] = b64(d[hm_off: hm_off + 65 * 65 * 2])
@@ -121,8 +126,7 @@ label{display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer}
   <label><input type="checkbox" id="ck_hm"> Altezze (heightmap)</label>
   <label><input type="checkbox" id="ck_pth"> Percorsi AI (PTH)</label>
   <label><input type="checkbox" id="ck_obj" checked> Oggetti (PND)</label>
-  <label style="margin-left:14px"><input type="checkbox" id="ck_mx" checked> specchia X oggetti</label>
-  <h3>Sezioni PLD <span style="text-transform:none">(scala <input class="num" id="scale" type="number" value="8" step="0.5"> tar.X <input class="num" id="tarx" type="number" value="23" step="1"> tar.Y <input class="num" id="tary" type="number" value="8" step="1">× <label style="display:inline"><input type="checkbox" id="ck_smx"> specchia X</label>)</span></h3>
+  <h3>Sezioni PLD <span style="text-transform:none">(scala <input class="num" id="scale" type="number" value="8" step="0.5"> tar.X <input class="num" id="tarx" type="number" value="0" step="1"> tar.Y <input class="num" id="tary" type="number" value="0" step="1">× <label style="display:inline"><input type="checkbox" id="ck_smx"> specchia X</label>)</span></h3>
   <div id="pldsecs"></div>
   <h3>Oggetti nel livello</h3>
   <div id="legend"></div>
@@ -181,12 +185,14 @@ function draw(){
     ctx.fillStyle='rgba(80,160,255,.55)';
     for(let r=0;r<128;r++)for(let c=0;c<128;c++)if(g[r*128+c])ctx.fillRect(c*cell,r*cell,cell,cell)}
   const legend={};
-  const mx=document.getElementById('ck_mx').checked;
+  // istanze PND -> tile: FORMULA DEL MOTORE (FUN_800a7fbc: wx=64x-0x4000,
+  // wz=0x4000-64z; FUN_800a79f4: tile=(w+0x4000)/512) => (x/8, 64-z/8).
+  // In unita' canvas (8/tile): X=x, Z=W-z. Stessa formula per le torrette extra.
   if(document.getElementById('ck_obj').checked){
     for(const it of l.inst){const [m,x,h,z,e]=it;const nm=l.models[m]||('#'+m);
       legend[nm]=(legend[nm]||0)+1;
       ctx.fillStyle=mcolor(nm);ctx.strokeStyle='#000';
-      const X=(mx?W+(+document.getElementById('tarx').value||0)-x:x)*px,Z=z*px,R=/BSE|BASE/i.test(nm)&&!/flag/i.test(nm)?7:4;
+      const X=x*px,Z=(W-z)*px,R=/BSE|BASE/i.test(nm)&&!/flag/i.test(nm)?7:4;
       ctx.beginPath();ctx.arc(X,Z,R,0,7);ctx.fill();ctx.stroke()}}
   const sc=parseFloat(document.getElementById('scale').value)||8;
   const smx=document.getElementById('ck_smx').checked;
@@ -228,7 +234,7 @@ cv.onclick=e=>{
   const info=`TB-POS lvl=${l.entry} ${l.name} tile=(${(wx/8).toFixed(2)},${(wz/8).toFixed(2)}) mondo=(${wx.toFixed(0)},${wz.toFixed(0)}) `+
     `centroRel_mezziTile=(${((wx/8-32)*2).toFixed(1)},${((wz/8-32)*2).toFixed(1)}) `+
     `vista[specchiaX=${g('ck_view').checked?1:0} specchiaY=${g('ck_viewy').checked?1:0} rot=${g('rot').value} `+
-    `specchiaXogg=${g('ck_mx').checked?1:0} scalaPLD=${g('scale').value} specchiaXpld=${g('ck_smx').checked?1:0}]`;
+    `scalaPLD=${g('scale').value} specchiaXpld=${g('ck_smx').checked?1:0}]`;
   const ta=document.createElement('textarea');ta.value=info;document.body.appendChild(ta);
   ta.select();try{document.execCommand('copy')}catch(x){}
   if(navigator.clipboard)navigator.clipboard.writeText(info).catch(()=>{});
@@ -245,14 +251,14 @@ cv.onmousemove=e=>{
     `mondo (${wx.toFixed(0)}, ${wz.toFixed(0)})  tile (${(wx/8).toFixed(1)}, ${(wz/8).toFixed(1)})  PLD (${(wx/sc).toFixed(1)}, ${(wz/sc).toFixed(1)})`;
   // tooltip oggetti
   const l=LV[cur];const tip=document.getElementById('tip');let found=null;
-  const mx2=document.getElementById('ck_mx').checked;
-  for(const it of l.inst){const ix=mx2?W+(+document.getElementById('tarx').value||0)-it[1]:it[1];const dx=ix-wx,dz=it[3]-wz;if(dx*dx+dz*dz<25){found=it;break}}
+  for(const it of l.inst){const ix=it[1],iz=W-it[3];const dx=ix-wx,dz=iz-wz;if(dx*dx+dz*dz<25){found=it;break}}
+  const r=cv.getBoundingClientRect();
   if(found){tip.style.display='block';tip.style.left=(e.clientX-r.left+14)+'px';tip.style.top=(e.clientY-r.top+14)+'px';
     tip.textContent=`${l.models[found[0]]||'#'+found[0]} (${found[1]},${found[3]}) alt=${found[2]} e=${found[4]} rot=${found[5]}`}
   else tip.style.display='none';
 }
 sel.onchange=()=>{cur=+sel.value;buildSecUI();draw()};
-['tarx','tary','ck_view','ck_viewy','rot','ck_gr','ck_hm','ck_pth','ck_obj','ck_mx','ck_smx','scale'].forEach(id=>document.getElementById(id).onchange=draw);
+['tarx','tary','ck_view','ck_viewy','rot','ck_gr','ck_hm','ck_pth','ck_obj','ck_smx','scale'].forEach(id=>document.getElementById(id).onchange=draw);
 buildSecUI();draw();
 </script></body></html>"""
 

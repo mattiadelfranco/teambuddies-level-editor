@@ -140,7 +140,14 @@ offset  size  field
 16  s32   rotation field 2
 ```
 
-The instance grid X is mirrored relative to tile-grid X (`tile_x = (512 - x)/8`).
+The engine's level parser (`FUN_800a7fbc`, ENG) converts instances to world
+coordinates as `wx = 64*x - 0x4000`, `wy = -64*alt`, `wz = 0x4000 - 64*z`
+(world Y is down, so positive `alt` = up), and world maps to the tile grid as
+`tile = (w + 0x4000)/512` (`FUN_800a79f4`). Hence
+**`tile = (x/8, 64 - z/8)` — the z axis is mirrored, x is not** (same
+transform as the extra list below). Instance `alt` equals the terrain height
+under the object in vanilla data (mean |alt − h| ≈ 0 across all 45 levels —
+a strong self-check for the frame).
 `BSE_*` instances are the base buildings; moving one moves the base.
 
 ### Static-objects "extra list" (20 bytes)
@@ -159,12 +166,19 @@ Turrets and other static props. `u16 count` then records of ten u16:
 9    (0)
 ```
 
-Visual position in-game = `(x + 18, 512 - z)` (calibration includes a
-half-tile anchor + the game's isometric rendering).
+World transform: identical to object instances (`wx = 64*x - 0x4000`,
+`wz = 0x4000 - 64*z` → `tile = (x/8, 64 - z/8)`). Spawn yaw =
+`(-rotation) ^ 0x800` (`FUN_800a8780`). An old `(x + 18, ...)` empirical
+calibration predated the exact tile-array offset fix and is obsolete.
 
 ### Heightmap, tiles, animation queue
 
-- **Heightmap**: 65×65 grid of s16 vertex heights.
+- **Heightmap**: 65×65 grid of s16 vertex heights, row = z, col = x
+  (`FUN_800ab6b0` samples vertex `(wx+0x4000)>>9 + ((wz+0x4000)>>9)*65` and
+  bilinearly interpolates, picking the diagonal from the tile's flag bits 1–2).
+  Runtime scale (`FUN_800a9744`): `h_world = -64 * h_file` — with 512 world
+  units per tile that is **h_file/8 tiles, positive = up** (values are −20…56
+  in vanilla, steps of 4 ≈ half a tile). Instance `alt` uses the same unit.
 - **Tiles**: 64×64 records of 28 bytes:
   `[u16 atlas U (0–1023)][u8 V][4× s8 corner deltas in {0,±63} = 8 orientations]
   [u8 clut] + 16 bytes vertex colors (RGBA×4) + u32 flag`.
@@ -239,21 +253,23 @@ Model axes: `a` = vertical (positive up), `b`/`c` horizontal; 1 tile = 512
 model units (= 64 × the 0–512 world-data unit). Untextured parts use the header
 RGB as flat color; TIM color 0 is transparent (alpha-tested foliage).
 
-**Coordinate frames** (anchored to the tile/heightmap grid, which is the same
-frame as PLD s0 — verified in game via the pads' painted tiles):
+**Coordinate frames** — all derived from the engine code (`FUN_800a7fbc`
+world conversion + `FUN_800a79f4`/`FUN_800ab6b0` world→tile indexing), and
+cross-checked in data (instance `alt` ≡ terrain height; pad↔base claiming
+distances):
 
 | entity                | tile-frame position                  |
 |-----------------------|--------------------------------------|
-| PLD s0 / s6 / s3      | direct (`tile = 32 + s16(raw)/512`)  |
-| tile array, heightmap | row = z, col = x                     |
-| PND instances         | `((512 − x)/8, z/8)` — **x mirrored**|
-| PND extra list        | `(x/8, 64 − z/8)` — **z mirrored**   |
+| PLD s0 / s6 / s3      | direct (`tile = 32 + s16(raw)/512`; raw s0/s6 values are world units) |
+| tile array, heightmap | row = z, col = x (not mirrored vs world) |
+| PND instances         | `(x/8, 64 − z/8)` — z mirrored       |
+| PND extra list        | `(x/8, 64 − z/8)` — same transform   |
 
-Distances are invariant under global mirroring, so proximity-based analyses
-(base claiming etc.) cannot distinguish these frames — only absolute anchors
-like the painted pad tiles can. Instance yaw comes from `r1`
-(`0x1000<<16` = full turn; in the mirrored frame the spin direction inverts
-and the mesh must be x-mirrored too).
+World Y points down (`h_world = -64*h_file`, `wy = -64*alt`), so a rotation
+by `+θ` about world Y appears as `−θ` in a Y-up viewer. Instance yaw comes
+from `r1`: angle = `(r1>>16) & 0xfff` (`0x1000` = full turn), flipped to
+`0x800 − angle` when `|s16(r1 & 0xffff)| > 500`; the runtime stores the
+negated angle. Extra-list spawn yaw = `(-rotation) ^ 0x800`.
 
 ---
 
