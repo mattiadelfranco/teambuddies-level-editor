@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Team Buddies — Map Editor</title>
+<link rel="stylesheet" href="/editor.css">
+</head>
+<body>
+<header id="topbar">
+  <strong>Team Buddies</strong>
+  <select id="level"></select>
+  <div class="seg" id="viewseg">
+    <button id="v2d" class="on">2D</button><button id="v3d">3D</button>
+  </div>
+  <span class="grow"></span>
+  <span id="dirty"></span>
+  <button id="save" class="accent">💾 Save level</button>
+  <button id="build">🔨 Build ISO</button>
+</header>
+
+<div id="body">
+  <nav id="tools">
+    <button id="t_select" class="tool on" title="Select / move (V)">◇</button>
+    <button class="tool off" title="Heights — coming in phase 1">▲</button>
+    <button class="tool off" title="Tiles — coming in phase 2">▦</button>
+  </nav>
+
+  <main id="viewport">
+    <canvas id="cv2d" width="1024" height="1024"></canvas>
+    <canvas id="cv3d"></canvas>
+    <div id="tip"></div>
+  </main>
+
+  <aside id="panel">
+    <div id="tabs">
+      <button data-tab="inspector" class="on">Inspector</button>
+      <button data-tab="catalog">Catalog</button>
+      <button data-tab="level">Level</button>
+      <button data-tab="layers">Layers</button>
+    </div>
+
+    <section id="tab-inspector" class="tab on">
+      <div id="ins-empty" class="hint">Nothing selected — click a marker in the
+        viewport. Click empty ground to copy its coordinates.</div>
+      <div id="ins-body" style="display:none">
+        <h3 id="ins-title"></h3>
+        <div id="ins-pos" class="hint"></div>
+        <div id="ins-fields"></div>
+        <div class="row">
+          <button id="ins-dup">Duplicate</button>
+          <button id="ins-del" class="danger">Delete</button>
+        </div>
+        <div id="ins-note" class="hint"></div>
+      </div>
+    </section>
+
+    <section id="tab-catalog" class="tab">
+      <h3>Unit (s6)</h3>
+      <div class="row">
+        <select id="cat-s6"></select>
+        <select id="cat-s6team">
+          <option value="0">team 1</option><option value="1">team 2</option>
+          <option value="2">team 3</option><option value="3">team 4</option>
+        </select>
+        <button id="cat-addunit">Add</button>
+      </div>
+      <h3>Level object (instance)</h3>
+      <div class="row">
+        <select id="cat-mdl"></select>
+        <button id="cat-addobj">Add</button>
+      </div>
+      <h3>Turret / static (extra list)</h3>
+      <div class="row">
+        <select id="cat-extra"></select>
+        <button id="cat-addextra">Add</button>
+      </div>
+      <div class="row">
+        <button id="cat-defenses" title="Two turrets of the selected type around every base, owner's team">🛡 Base defenses</button>
+      </div>
+      <h3>Structure</h3>
+      <div class="row">
+        <button id="cat-addteam" title="New s0 pad + cloned base + flag. The effective team count is capped by the mission config (Level tab).">➕ Team (pad+base)</button>
+        <button id="cat-addzone" title="New crate-launch zone (delivery always goes to the nearest zone)">📦 Crate zone</button>
+      </div>
+      <div id="cat-note" class="hint"></div>
+    </section>
+
+    <section id="tab-level" class="tab">
+      <h3>Mission</h3>
+      <div class="row">
+        <label>Teams</label>
+        <select id="lv-teams"></select>
+      </div>
+      <div class="hint">Team count of THIS mission slot (config 0956+0003).
+        The s0 pad count is the cap: add as many pads. &gt;4 is experimental.</div>
+      <h3>Crate recipes <span id="lv-rsetlbl" class="hint"></span></h3>
+      <div class="row"><select id="lv-rset"></select></div>
+      <div id="lv-ruse" class="hint"></div>
+      <div id="lv-rrows"></div>
+      <div class="hint">Col 1 = normal crate, col 2 = mega version. Sets are
+        SHARED between the levels listed above.</div>
+    </section>
+
+    <section id="tab-layers" class="tab">
+      <h3>View (2D)</h3>
+      <label><input type="checkbox" id="ly-mx"> Mirror X</label>
+      <label><input type="checkbox" id="ly-my" checked> Mirror Y (game view)</label>
+      <div class="row"><label>Rotate</label>
+        <select id="ly-rot"><option value="0">0°</option><option value="90">90°</option>
+        <option value="180">180°</option><option value="270">270°</option></select>
+      </div>
+      <div class="hint" id="ly-3dhint" style="display:none">In 3D these are
+        camera controls: use ⟲ ⟳ or drag to orbit. “Game view” points the
+        camera like the in-game one.</div>
+      <div class="row" id="ly-camrow" style="display:none">
+        <button id="ly-rotl">⟲</button><button id="ly-rotr">⟳</button>
+        <button id="ly-gamecam">Game view</button>
+      </div>
+      <h3>Layers</h3>
+      <label><input type="checkbox" id="ly-ground" checked> Ground texture</label>
+      <label><input type="checkbox" id="ly-hm"> Heightmap</label>
+      <label><input type="checkbox" id="ly-pth"> AI paths (PTH)</label>
+      <label><input type="checkbox" id="ly-obj" checked> Objects (PND)</label>
+      <h3>PLD sections</h3>
+      <div id="ly-secs"></div>
+      <h3>Objects in level</h3>
+      <div id="ly-legend"></div>
+    </section>
+  </aside>
+</div>
+
+<footer id="status">
+  <span id="st-pos"></span>
+  <span id="st-sel"></span>
+  <span class="grow"></span>
+  <span id="st-log"></span>
+</footer>
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

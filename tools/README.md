@@ -22,23 +22,27 @@ terrain. Idempotent: every step is skipped if its output already exists.
 python3 tools/editor_server.py        # then open http://localhost:8787
 ```
 
-Serves the browser editor (regenerated on start and after every save) and applies
-edits:
+Serves the editor web app from `web/` (plain ES modules, no build step) and
+applies edits:
 
+- `GET /api/levels`, `/api/catalogs`, `/api/level/<entry>` — level list, object
+  catalogs and full parsed level data (mods-aware; parsing in `tb_level.py`)
 - `POST /api/save` — writes the edited level into `teambudd/mods/<entry>/`
-  (patched copies of the level's PLD/PND; the vanilla files are never touched)
+  (baseline = the existing mod if present, else a copy of the vanilla files;
+  a no-op save is byte-identical — regression-tested on all 45 levels)
 - `POST /api/build` — applies the ENG.BIN team patch, repacks every modded level
   into a fresh copy of the vanilla `BUDDIES.DAT` and rebuilds the ISO
   (`teambudd/rebuild.bin` / `rebuild.cue`, ready for an emulator)
 - `GET /api/3d/<entry>` — meshes + textures for the editor's 3D view (parsed
   from the level's `MDL.BND`/`TIM.BND` via `tb_lod.py`, cached in memory)
-- `GET /ground3d/<entry>.png` — 32 px/tile terrain render (2048×2048, cached in
-  `teambudd/grounds3d/`, invalidated by the PND mtime)
+- `GET /ground3d/<entry>.png` — native-res terrain render (64 px/tile,
+  4096×4096, cached in `teambudd/grounds3d/`, invalidated by the PND mtime)
 
-The editor has a **3D view** ("🧊 vista 3D"): real level geometry (heightmap
-terrain + textured LOD models), orbit camera, and exact world-coordinate
-picking — click on the ground to copy precise tile coordinates, drag markers
-to move pads/units/turrets/objects with no calibration offsets.
+The app has synchronized **2D and 3D views** sharing one state store: real
+level geometry (heightmap terrain + textured LOD models), orbit camera, exact
+world-coordinate picking (click the ground to copy tile coordinates), and the
+same editing operations in both views. Layer toggles (ground texture,
+heightmap, AI paths, objects, PLD sections) work in 2D and 3D.
 
 ## tb_lod.py — parse .LOD models
 
@@ -100,16 +104,16 @@ python3 tools/render_ground.py teambudd/dat_estratto/bind/0512 out.png 8
 Decodes the PND tile array against the level's TIM atlas and writes a top-down
 PNG (scale = pixels per world unit / 8 per tile at scale 8).
 
-## build_viewer.py / build_editor.py — generate the web UI
+## build_viewer.py / build_editor.py — standalone HTML (legacy)
 
 ```
 python3 tools/build_viewer.py            # teambudd/viewer.html (read-only viewer)
-python3 tools/build_editor.py            # teambudd/editor.html (viewer + editing UI)
+python3 tools/build_editor.py            # teambudd/editor.html (legacy editor)
 ```
 
-Self-contained HTML with all levels embedded. `build_editor.py` also re-renders
-the terrain of modded levels and injects the object catalogs (STATICS, the
-62-entry unit table) and the editing UI. Normally invoked by `editor_server.py`.
+Self-contained HTML with all levels embedded — useful to browse levels without
+running the server. The editing UI now lives in `web/` served by
+`editor_server.py`; `build_editor.py` is kept as the legacy single-file editor.
 
 ## ghidra/scripts/ — headless Ghidra helpers
 

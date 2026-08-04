@@ -14,6 +14,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tb_lod
+import tb_level
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIND = os.path.join(ROOT, "teambudd/dat_estratto/bind")
@@ -21,7 +22,9 @@ MODS = os.path.join(ROOT, "teambudd/mods")
 DAT = os.path.join(ROOT, "teambudd/estratto/BUDDIES.DAT")
 DAT_ORIG = DAT + ".orig"
 MANIFEST = os.path.join(ROOT, "teambudd/dat_estratto/manifest.tsv")
-EDITOR_HTML = os.path.join(ROOT, "teambudd/editor.html")
+WEB = os.path.join(ROOT, "web")
+MIME = {".html": "text/html; charset=utf-8", ".css": "text/css",
+        ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml"}
 
 
 
@@ -367,19 +370,24 @@ def apply_teams(mission, n):
 
 
 def apply_edits(entry, edits):
-    """Applica il JSON di modifiche al livello: copia bind/<entry> in mods/<entry>
-    e patcha PLD (s0, s6) e PND (istanze, lista extra torrette)."""
-    src = os.path.join(BIND, entry)
+    """Applica il JSON di modifiche al livello e scrive mods/<entry>.
+    BASELINE = il mod esistente se c'è (preserva mappe swappate di slot e le
+    modifiche future a terreno/tile), altrimenti copia del vanilla. Il client
+    manda sempre le liste COMPLETE, quindi le sezioni vengono ricostruite
+    sopra la baseline; le sezioni identiche vengono saltate (byte-identità
+    dei no-op save, il padding vanilla non è deterministico)."""
     dst = os.path.join(MODS, entry)
-    if os.path.exists(dst):
-        shutil.rmtree(dst)
-    shutil.copytree(src, dst)
+    if not (os.path.isdir(dst) and any(f.endswith(".PND") for f in os.listdir(dst))):
+        if os.path.exists(dst):
+            shutil.rmtree(dst)
+        shutil.copytree(os.path.join(BIND, entry), dst)
 
     pld_path = next(os.path.join(dst, f) for f in os.listdir(dst) if f.endswith(".PLD"))
     pnd_path = next(os.path.join(dst, f) for f in os.listdir(dst) if f.endswith(".PND"))
 
     # --- PLD ---
     d = bytearray(open(pld_path, "rb").read())
+    pld_before = bytes(d)          # stato pre-edit (per i vecchi centri pedana)
     offs = list(struct.unpack_from("<17I", d, 8))
 
     # s0: lista [x,z,w,h] in mezzi-tile centro-relativi (float) -> 8.8 con segno.
@@ -429,12 +437,15 @@ def apply_edits(entry, edits):
             payload += struct.pack(f"<I{len(z)}H", len(z), *z)
             if len(z) & 1:
                 payload += b"\0\0"
-        old_size = end3 - o3
-        delta = len(payload) - old_size
-        d[o3:o3 + old_size] = payload
-        if delta:
-            offs = [v + delta if v > offs[3] else v for v in offs]
-            struct.pack_into("<17I", d, 8, *offs)
+        # no-op: zone identiche -> non toccare (il padding vanilla dopo le
+        # zone a count dispari non e' zero: riscriverlo rompe la byte-identita')
+        if new_zones != zones:
+            old_size = end3 - o3
+            delta = len(payload) - old_size
+            d[o3:o3 + old_size] = payload
+            if delta:
+                offs = [v + delta if v > offs[3] else v for v in offs]
+                struct.pack_into("<17I", d, 8, *offs)
 
     # s6: {extra: int, records: [[tipo, team, var, x, z], ...]} - lunghezza libera:
     # la sezione viene ricostruita e le sezioni successive (s7..s16) shiftate
@@ -499,7 +510,7 @@ def apply_edits(entry, edits):
     # = tappo d'erba; record NUOVI = copia i tile dalla pedana 1 (posizione
     # corrente) + clone delle frecce animate
     if "s0" in edits:
-        orig = open(os.path.join(BIND, entry, os.path.basename(pld_path)), "rb").read()
+        orig = pld_before          # stato PRE-edit del PLD (mod o vanilla)
         ooffs = struct.unpack_from("<17I", orig, 8)
         oo = ooffs[0] + 8
         ocnt = struct.unpack_from("<I", orig, oo)[0]
@@ -662,15 +673,37 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b)
 
+    def _file(self, path):
+        b = open(path, "rb").read()
+        self.send_response(200)
+        self.send_header("Content-Type", MIME.get(os.path.splitext(path)[1],
+                                                  "application/octet-stream"))
+        self.send_header("Content-Length", str(len(b)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(b)
+
     def do_GET(self):
         if self.path in ("/", "/editor"):
-            b = open(EDITOR_HTML, "rb").read()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(b)))
-            self.end_headers()
-            self.wfile.write(b)
-        elif self.path.startswith("/api/3d/"):
+            return self._file(os.path.join(WEB, "index.html"))
+        if self.path.startswith(("/js/", "/css/")) or self.path == "/editor.css":
+            p = os.path.normpath(os.path.join(WEB, self.path.lstrip("/")))
+            if p.startswith(WEB) and os.path.isfile(p):
+                return self._file(p)
+            return self._json({"err": "not found"}, 404)
+        if self.path == "/api/levels":
+            return self._json(tb_level.list_levels())
+        if self.path == "/api/catalogs":
+            return self._json(tb_level.catalogs())
+        if self.path.startswith("/api/level/"):
+            entry = self.path.split("/")[-1].split("?")[0]
+            if not (entry.isdigit() and os.path.isdir(os.path.join(BIND, entry))):
+                return self._json({"err": "unknown level"}, 404)
+            try:
+                return self._json(tb_level.parse_level(entry))
+            except Exception as e:
+                return self._json({"err": str(e)}, 500)
+        if self.path.startswith("/api/3d/"):
             entry = self.path.split("/")[-1].split("?")[0]
             if not (entry.isdigit() and os.path.isdir(os.path.join(BIND, entry))):
                 return self._json({"err": "livello sconosciuto"}, 404)
@@ -714,21 +747,8 @@ class H(BaseHTTPRequestHandler):
                     res["recipes"] = apply_recipes(rec["set"], rec["pairs"])
                 if tc is not None:
                     res["teams"] = apply_teams(int(body["entry"]) - 512, tc)
-                # rigenera terreno+pagina in background (ricarica la pagina per vederlo)
-                import threading
-                if globals().get("_refreshing"):
-                    globals()["_pending"] = True
-                else:
-                    globals()["_refreshing"] = True
-                    def _rf():
-                        while True:
-                            globals()["_pending"] = False
-                            subprocess.run([sys.executable, os.path.join(ROOT, "tools/build_editor.py")], cwd=ROOT)
-                            if not globals().get("_pending"):
-                                break
-                        globals()["_refreshing"] = False
-                    threading.Thread(target=_rf, daemon=True).start()
-                res["nota"] = "terreno in rigenerazione: ricarica la pagina tra ~30s per vedere la ridipintura"
+                # il PNG del terreno si rigenera da solo alla prossima richiesta
+                # (ground3d_png invalida sul mtime del PND moddato)
                 self._json(res)
             elif self.path == "/api/build":
                 self._json(build_iso())
@@ -739,6 +759,5 @@ class H(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    subprocess.run([sys.executable, os.path.join(ROOT, "tools/build_editor.py")], cwd=ROOT)
-    print("Editor: http://localhost:8787  (Ctrl+C per uscire)")
+    print("Editor: http://localhost:8787  (Ctrl+C to quit)")
     HTTPServer(("127.0.0.1", 8787), H).serve_forever()
