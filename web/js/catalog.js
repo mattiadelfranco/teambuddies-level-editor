@@ -14,16 +14,20 @@ export function cancel() {
   if (!pending) return;
   pending = null;
   document.querySelectorAll('.cat-item.on').forEach(e => e.classList.remove('on'));
+  $('placebar').style.display = 'none';
   store.say('');
 }
 
 function arm(kind, id, label, el) {
   document.querySelectorAll('.cat-item.on').forEach(e => e.classList.remove('on'));
-  if (pending && pending.kind === kind && pending.id === id) { pending = null; store.say(''); return; }
+  if (pending && pending.kind === kind && pending.id === id) return cancel();
   pending = { kind, id, label };
   el.classList.add('on');
-  store.say('▸ click the map to place "' + label + '" — Esc cancels, click again to keep placing.');
+  $('placebar-txt').textContent = 'Placing: ' + label + ' — click the map';
+  $('placebar').style.display = 'flex';
+  store.say('▸ click the map to place "' + label + '" — right-click, Esc or ✕ stops.');
 }
+document.getElementById('placebar-stop').onclick = () => cancel();
 
 // called by the views on a click while place mode is armed; world = canvas 512
 export function placeAt(wx, wz) {
@@ -87,7 +91,9 @@ export function rebuild() {
   const keys = Object.keys(cat.statics).map(Number).sort((a, b) => a - b);
   const groups = [
     ['Turrets', k => /^Turret/i.test(cat.statics[k])],
-    ['Other statics (trees / rocks / buildings / powerups)', k => !/^Turret/i.test(cat.statics[k])],
+    ['Other statics — no preview: in game these borrow the LEVEL\'s own '
+     + 'furniture models (their resource slots are level-dependent). '
+     + 'Untested in vanilla.', k => !/^Turret/i.test(cat.statics[k])],
   ];
   for (const [glabel, filter] of groups) {
     const h = document.createElement('div');

@@ -14,6 +14,8 @@
   </div>
   <span class="grow"></span>
   <span id="dirty"></span>
+  <button id="undo" title="Undo (⌘Z / Ctrl+Z)">↶</button>
+  <button id="redo" title="Redo (⇧⌘Z / Ctrl+Y)">↷</button>
   <button id="save" class="accent">💾 Save level</button>
   <button id="build">🔨 Build ISO</button>
 </header>
@@ -63,6 +65,10 @@
     <canvas id="cv2d" width="1024" height="1024"></canvas>
     <canvas id="cv3d"></canvas>
     <div id="tip"></div>
+    <div id="placebar" style="display:none">
+      <span id="placebar-txt"></span>
+      <button id="placebar-stop">✕ stop placing</button>
+    </div>
   </main>
 
   <aside id="panel">

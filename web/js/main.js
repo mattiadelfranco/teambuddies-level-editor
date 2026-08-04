@@ -52,13 +52,28 @@ async function boot() {
       V3.refreshTerrainMesh();
     }
     if (what === 'layers') V3.composeGround();
-    if (what === 'hm') V3.refreshTerrainMesh();
+    if (what === 'hm' || what === 'hm-restored') V3.refreshTerrainMesh();
     if (what === 'tiles') scheduleCompose();
+    if (what === 'tiles-restored') { TL.repaintAll(); scheduleCompose(); }
     if (store.view.mode === '2d') draw();
   });
 
   window.addEventListener('keydown', e => {
-    if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    const inInput = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+      if (inInput) return;             // let text inputs keep their own undo
+      e.preventDefault();
+      if (e.shiftKey) store.redo(); else store.undo();
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')) {
+      if (inInput) return;
+      e.preventDefault();
+      store.redo();
+      return;
+    }
+    if (e.key === 'Escape' && inInput) { document.activeElement.blur(); return; }
+    if (inInput) return;
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (store.sel && store.tool === 'select') {
         let err;

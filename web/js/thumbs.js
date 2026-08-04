@@ -73,7 +73,9 @@ function fitVP(batches) {
                c[2] + d * Math.cos(pa) * Math.cos(ya)];
   const f = [c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]];
   const fl = Math.hypot(...f); f[0] /= fl; f[1] /= fl; f[2] /= fl;
-  const s = [f[2], 0, -f[0]];
+  // right = cross(f, up) — same convention as view3d (the mirrored basis of
+  // the first version rendered every thumbnail upside down)
+  const s = [-f[2], 0, f[0]];
   const sl = Math.hypot(...s) || 1; s[0] /= sl; s[2] /= sl;
   const u = [s[1] * f[2] - s[2] * f[1], s[2] * f[0] - s[0] * f[2], s[0] * f[1] - s[1] * f[0]];
   const V = [s[0], u[0], -f[0], 0, s[1], u[1], -f[1], 0, s[2], u[2], -f[2], 0,

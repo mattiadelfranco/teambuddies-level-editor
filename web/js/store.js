@@ -48,10 +48,85 @@ export const store = {
   onChange(fn) { listeners.push(fn); },
   emit(what) { for (const fn of listeners) fn(what); },
 
+  // ---- undo/redo: one snapshot per user gesture ----
+  _undo: [], _redo: [], _gesture: false,
+
+  _snap() {
+    const ed = this.ed;
+    return {
+      s0: ed.s0.map(r => r.slice()), s3: ed.s3.map(r => r.slice()),
+      zcfg: ed.zcfg.map(c => (c ? c.slice() : null)),
+      zcfgTouched: ed.zcfgTouched, tcount: ed.tcount, tcountTouched: ed.tcountTouched,
+      s6: JSON.parse(JSON.stringify(ed.s6)),
+      extra: ed.extra ? ed.extra.map(r => r.slice()) : null,
+      inst: ed.inst.map(r => r.slice()),
+      hm: ed.hm.slice(), hmTouched: ed.hmTouched,
+      tiles: ed.tiles.slice(), tilesTouched: ed.tilesTouched,
+      rec: { set: this.rec.set, pairs: this.rec.pairs.map(p => p.slice()), touched: this.rec.touched },
+      sel: this.sel ? { ...this.sel } : null, dirty: this.dirty,
+      entry: this.entry,
+    };
+  },
+  _restore(s) {
+    const ed = this.ed;
+    ed.s0 = s.s0.map(r => r.slice()); ed.s3 = s.s3.map(r => r.slice());
+    ed.zcfg = s.zcfg.map(c => (c ? c.slice() : null));
+    ed.zcfgTouched = s.zcfgTouched; ed.tcount = s.tcount; ed.tcountTouched = s.tcountTouched;
+    ed.s6 = JSON.parse(JSON.stringify(s.s6));
+    ed.extra = s.extra ? s.extra.map(r => r.slice()) : null;
+    ed.inst = s.inst.map(r => r.slice());
+    const hmChanged = ed.hm.some((v, i) => v !== s.hm[i]);
+    ed.hm.set(s.hm); ed.hmTouched = s.hmTouched;         // keep shared refs
+    let tilesChanged = false;
+    for (let i = 0; i < ed.tiles.length; i++)
+      if (ed.tiles[i] !== s.tiles[i]) { tilesChanged = true; break; }
+    ed.tiles.set(s.tiles); ed.tilesTouched = s.tilesTouched;
+    this.rec = { set: s.rec.set, pairs: s.rec.pairs.map(p => p.slice()), touched: s.rec.touched };
+    this.sel = s.sel ? { ...s.sel } : null;
+    this.dirty = s.dirty;
+    return { hmChanged, tilesChanged };
+  },
+  pushUndo() {
+    if (!this.ed) return;
+    this._undo.push(this._snap());
+    if (this._undo.length > 50) this._undo.shift();
+    this._redo.length = 0;
+  },
+  beginGesture() {
+    if (this._gesture) return;
+    this.pushUndo();
+    this._gesture = true;
+  },
+  endGesture() { this._gesture = false; },
+  undo() {
+    const s = [...this._undo].reverse().find(x => x.entry === this.entry);
+    if (!s) { this.say('nothing to undo on this level'); return; }
+    this._undo.splice(this._undo.lastIndexOf(s), 1);
+    this._redo.push(this._snap());
+    const ch = this._restore(s);
+    this.emit('undo');
+    if (ch.hmChanged) this.emit('hm-restored');
+    if (ch.tilesChanged) this.emit('tiles-restored');
+    this.say('↶ undo');
+  },
+  redo() {
+    const s = [...this._redo].reverse().find(x => x.entry === this.entry);
+    if (!s) { this.say('nothing to redo'); return; }
+    this._redo.splice(this._redo.lastIndexOf(s), 1);
+    this._undo.push(this._snap());
+    const ch = this._restore(s);
+    this.emit('undo');
+    if (ch.hmChanged) this.emit('hm-restored');
+    if (ch.tilesChanged) this.emit('tiles-restored');
+    this.say('↷ redo');
+  },
+
   // every mutation goes through here
   apply(fn, what = 'edit') {
+    const dirties = what === 'edit' || what === 'hm' || what === 'tiles';
+    if (dirties && !this._gesture) this.pushUndo();
     fn(this);
-    if (what === 'edit' || what === 'hm' || what === 'tiles') this.dirty = true;
+    if (dirties) this.dirty = true;
     this.emit(what);
   },
 

@@ -22,6 +22,7 @@ function falloff(d, r) {
 }
 
 export function beginStroke(tx, tz, invert) {
+  store.beginGesture();               // one undo step per stroke
   const hm = store.ed.hm;
   shadow = new Float64Array(hm);
   touched = new Set();
@@ -68,6 +69,7 @@ export function endStroke() {
   const warn = padWarnings(touched);
   shadow = null; touched = null;
   store.apply(st => { st.ed.hmTouched = true; }, 'hm');
+  store.endGesture();
   if (warn) store.say(warn);
 }
 

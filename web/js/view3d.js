@@ -527,7 +527,10 @@ function input() {
     const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
     sx = mx; sy = my; moved = 0;
     if (e.button === 1 || e.shiftKey) { mode = 'pan'; return; }
-    if (e.button === 2) { mode = 'orbit'; return; }
+    if (e.button === 2) {
+      if (CAT.pending) { CAT.cancel(); return; }   // right-click stops placing
+      mode = 'orbit'; return;
+    }
     if (CAT.pending) {
       const g = groundHit(mx, my, c.clientWidth, c.clientHeight);
       if (g && isFinite(g[0]))
@@ -555,10 +558,12 @@ function input() {
             TL.T.cloneDelta = [Math.floor(TL.T.cloneSrc[0]) - Math.floor(g[0]),
                                Math.floor(TL.T.cloneSrc[1]) - Math.floor(g[1])];
             mode = 'tilepaint';
+            store.beginGesture();
             TL.paintAt(g[0], g[1]);
           }
         } else if (TL.T.mode === 'paint') {
           mode = 'tilepaint';
+          store.beginGesture();
           TL.paintAt(g[0], g[1]);
         } else store.say('fill rect works in the 2D view — use paint here.');
       }
@@ -567,6 +572,7 @@ function input() {
     const it = pick3(mx, my);
     if (it) {
       mode = 'move';
+      store.beginGesture();           // one undo step per marker drag
       E3.drag = { it, py: it.k === 'in' ? (it.alt || 0) / 8 : heightAt(it.tx, it.tz) };
       store.apply(s => { s.sel = { k: it.k, i: it.i }; }, 'select');
     } else mode = 'orbit';
@@ -618,7 +624,8 @@ function input() {
   });
   window.addEventListener('mouseup', e => {
     if (mode === 'sculpt') { endStroke(); mode = null; return; }
-    if (mode === 'tilepaint') { TL.T.cloneDelta = null; mode = null; return; }
+    if (mode === 'tilepaint') { store.endGesture(); TL.T.cloneDelta = null; mode = null; return; }
+    if (mode === 'move') store.endGesture();
     if (mode === 'orbit' && moved < 5 && E3.on && e.target === c) {
       const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
       const g = groundHit(mx, my, c.clientWidth, c.clientHeight);

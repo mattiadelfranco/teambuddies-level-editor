@@ -123,6 +123,8 @@ export function initUI(onViewMode) {
     }
     await store.load(e.target.value);
   };
+  $('undo').onclick = () => store.undo();
+  $('redo').onclick = () => store.redo();
   $('save').onclick = () => store.save().catch(e => store.say('SAVE ERROR: ' + e.message));
   $('build').onclick = async () => {
     store.say('building ISO…');

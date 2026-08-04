@@ -235,6 +235,11 @@ export function init2d(canvas, statusPos, tipEl) {
   cv = canvas;
   ctx = cv.getContext('2d');
 
+  cv.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (CAT.pending) CAT.cancel();    // right-click stops placing
+  });
+
   cv.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
     const [wx, wz] = evtWorld(e);
@@ -265,10 +270,12 @@ export function init2d(canvas, statusPos, tipEl) {
           TL.T.cloneDelta = [Math.floor(TL.T.cloneSrc[0]) - Math.floor(tx),
                              Math.floor(TL.T.cloneSrc[1]) - Math.floor(tz)];
           tilePaint = true;
+          store.beginGesture();
           TL.paintAt(tx, tz);
         }
       } else {
         tilePaint = true;
+        store.beginGesture();
         TL.paintAt(tx, tz);
       }
       e.preventDefault();
@@ -276,6 +283,7 @@ export function init2d(canvas, statusPos, tipEl) {
     }
     const it = pick(wx, wz);
     if (it) {
+      store.beginGesture();           // one undo step per marker drag
       store.apply(s => { s.sel = { k: it.k, i: it.i }; }, 'select');
       drag = { it, moved: false };
       e.preventDefault();
@@ -328,7 +336,8 @@ export function init2d(canvas, statusPos, tipEl) {
   });
 
   window.addEventListener('mouseup', () => {
-    if (strokeActive()) { endStroke(); return; }
+    if (strokeActive()) { endStroke(); return; }   // ends its own gesture
+    store.endGesture();
     if (tileRect) {
       TL.fillRect(tileRect[0][0], tileRect[0][1], tileRect[1][0], tileRect[1][1]);
       tileRect = null;
