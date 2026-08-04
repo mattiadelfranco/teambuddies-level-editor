@@ -131,6 +131,21 @@ def parse_level(entry):
         zones.append([(min(hx) + max(hx) + 1) / 4, (min(hz) + max(hz) + 1) / 4])
     lvl["s3"] = zones
 
+    # ---- tile array (64x64 x 28B) + animated-tile indices ----
+    d = open(pnds[0], "rb").read()
+    off_tiles = hm_off + 65 * 65 * 2
+    lvl["tiles"] = _b64(d[off_tiles: off_tiles + 4096 * 28])
+    anim = off_tiles + 131072            # engine reserves 32B/tile
+    lvl["animTiles"] = []
+    if anim + 2 <= len(d):
+        n1 = struct.unpack_from("<h", d, anim)[0]
+        o2 = anim + 2 + max(n1, 0) * 12
+        if 0 <= n1 < 2000 and o2 + 2 <= len(d):
+            n2 = struct.unpack_from("<H", d, o2)[0]
+            if n2 < 2000 and o2 + 2 + n2 * 16 <= len(d):
+                lvl["animTiles"] = sorted({struct.unpack_from("<H", d, o2 + 2 + k * 16)[0]
+                                           for k in range(n2)})
+
     # ---- PTH (AI walkability, never modded) ----
     pths = glob.glob(os.path.join(BIND, entry, "*.PTH"))
     lvl["pth"] = None
@@ -139,6 +154,33 @@ def parse_level(entry):
         if len(pd) == 16416:
             lvl["pth"] = _b64(pd[32:])
     return lvl
+
+
+def atlas(entry):
+    """Level texture atlas (the level's own .TIM): 4bpp indices + all CLUTs.
+    Cells are 64x64; a tile record picks a cell corner (U,V), a CLUT and one
+    of 8 orientations (corner deltas)."""
+    folder, _ = level_folder(entry)
+    tims = [t for t in glob.glob(os.path.join(folder, "*.TIM"))]
+    if not tims:   # atlas never modded so far, fall back to vanilla
+        tims = [t for t in glob.glob(os.path.join(BIND, entry, "*.TIM"))]
+    d = open(tims[0], "rb").read()
+    magic, typ = struct.unpack_from("<II", d, 0)
+    if magic != 0x10 or not (typ & 8):
+        raise ValueError("not a 4bpp TIM")
+    clen, _, _, cw, ch = struct.unpack_from("<IHHHH", d, 8)
+    cluts = []
+    for r in range(ch):
+        row = []
+        for c in range(cw):
+            v, = struct.unpack_from("<H", d, 20 + (r * cw + c) * 2)
+            row.append([(v & 31) * 8, ((v >> 5) & 31) * 8,
+                        ((v >> 10) & 31) * 8, 0 if v == 0 else 255])
+        cluts.append(row)
+    o = 8 + clen
+    _, _, _, iw, ih = struct.unpack_from("<IHHHH", d, o)
+    raw = d[o + 12: o + 12 + iw * 2 * ih]        # 2 pixels per byte, low nibble first
+    return {"w": iw * 4, "h": ih, "idx": _b64(raw), "cluts": cluts}
 
 
 # ------------------------------------------------------------- catalogs ----

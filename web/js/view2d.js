@@ -5,6 +5,7 @@ import { items, moveItem, owner, heightAt } from './items.js';
 import { b64u8 } from './api.js';
 import { api } from './api.js';
 import { brush, beginStroke, moveStroke, endStroke, strokeActive } from './terrain.js';
+import * as TL from './tiles.js';
 
 const W = 512;
 const SEC_COLORS = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#e84393',
@@ -14,6 +15,8 @@ const SEC_COLORS = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#e84393',
 let cv, ctx, ground = null, groundEntry = null, hover = null;
 let drag = null;
 let cursor = null;      // last mouse pos in world units (brush cursor)
+let tileRect = null;    // fill-rect drag [[tx,tz],[tx,tz]]
+let tilePaint = false;  // painting drag active
 
 function hash(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
 export function modelColor(n) {
@@ -55,8 +58,8 @@ export function draw() {
   ctx.clearRect(0, 0, cv.width, cv.height);
   ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
 
-  if (v.layers.ground && ground && ground.complete)
-    ctx.drawImage(ground, 0, 0, W, W);
+  const gc = TL.groundCanvas();
+  if (v.layers.ground && gc) ctx.drawImage(gc, 0, 0, W, W);
   else if (v.layers.ground) { ctx.fillStyle = '#1c2b1c'; ctx.fillRect(0, 0, W, W); }
 
   if (v.layers.hm) drawHeightmap();
@@ -72,6 +75,33 @@ export function draw() {
     ctx.arc(cursor[0], cursor[1], brush.radius * 8, 0, 7);
     ctx.stroke();
     ctx.setLineDash([]);
+  }
+  // tiles tool: animated-tile badges, hovered tile, fill-rect preview
+  if (store.tool === 'tiles') {
+    ctx.fillStyle = 'rgba(80,200,255,0.35)';
+    for (const i of store.lvl.animTiles)
+      ctx.fillRect((i % 64) * 8 + 2.5, (i >> 6) * 8 + 2.5, 3, 3);
+    const lw = 1.5 / Math.abs(m.a);
+    if (tileRect) {
+      const [a, b] = tileRect;
+      const x0 = Math.min(a[0], b[0]) | 0, x1 = Math.max(a[0], b[0]) | 0;
+      const z0 = Math.min(a[1], b[1]) | 0, z1 = Math.max(a[1], b[1]) | 0;
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = lw;
+      ctx.strokeRect(x0 * 8, z0 * 8, (x1 - x0 + 1) * 8, (z1 - z0 + 1) * 8);
+    } else if (cursor) {
+      const s = TL.T.size, h = (s - 1) / 2;
+      const x = Math.floor(cursor[0] / 8 - h) * 8, z = Math.floor(cursor[1] / 8 - h) * 8;
+      ctx.strokeStyle = TL.T.mode === 'pick' ? '#ffd60a'
+        : TL.T.mode === 'clone' ? '#00d2d3' : '#fff';
+      ctx.lineWidth = lw;
+      ctx.strokeRect(x, z, s * 8, s * 8);
+    }
+    if (TL.T.cloneSrc) {
+      ctx.strokeStyle = 'rgba(0,210,211,0.9)'; ctx.lineWidth = lw;
+      ctx.setLineDash([3 / Math.abs(m.a), 2 / Math.abs(m.a)]);
+      ctx.strokeRect(Math.floor(TL.T.cloneSrc[0]) * 8, Math.floor(TL.T.cloneSrc[1]) * 8, 8, 8);
+      ctx.setLineDash([]);
+    }
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
@@ -187,14 +217,18 @@ function pick(wx, wz) {
   return best;
 }
 
-export function loadGround() {
+export function loadGround(onReady) {
   if (groundEntry === store.entry && ground) return;
   groundEntry = store.entry;
   ground = new Image();
-  ground.onload = draw;
+  ground.onload = () => {
+    TL.setGroundImage(ground);      // shared canvas used by both views
+    draw();
+    if (onReady) onReady();
+  };
   ground.src = api.groundUrl(store.entry);
 }
-export function reloadGround() { groundEntry = null; loadGround(); }
+export function reloadGround(onReady) { groundEntry = null; loadGround(onReady); }
 
 export function init2d(canvas, statusPos, tipEl) {
   cv = canvas;
@@ -205,6 +239,31 @@ export function init2d(canvas, statusPos, tipEl) {
     const [wx, wz] = evtWorld(e);
     if (store.tool === 'height') {
       beginStroke(wx / 8, wz / 8, e.altKey);
+      e.preventDefault();
+      return;
+    }
+    if (store.tool === 'tiles') {
+      const tx = wx / 8, tz = wz / 8;
+      if (TL.T.mode === 'pick' || e.altKey && TL.T.mode !== 'clone') {
+        TL.readTile(tx, tz);
+        store.emit('stamp');
+      } else if (TL.T.mode === 'fill') {
+        tileRect = [[tx, tz], [tx, tz]];
+      } else if (TL.T.mode === 'clone') {
+        if (e.altKey || !TL.T.cloneSrc) {
+          TL.T.cloneSrc = [tx, tz];
+          store.say('clone source set — now paint to copy from there.');
+          draw();
+        } else {
+          TL.T.cloneDelta = [Math.floor(TL.T.cloneSrc[0]) - Math.floor(tx),
+                             Math.floor(TL.T.cloneSrc[1]) - Math.floor(tz)];
+          tilePaint = true;
+          TL.paintAt(tx, tz);
+        }
+      } else {
+        tilePaint = true;
+        TL.paintAt(tx, tz);
+      }
       e.preventDefault();
       return;
     }
@@ -226,6 +285,13 @@ export function init2d(canvas, statusPos, tipEl) {
     if (store.tool === 'height') {
       cursor = e.target === cv ? [wx, wz] : null;
       if (strokeActive()) { moveStroke(wx / 8, wz / 8, e.altKey); return; }
+      draw();
+      return;
+    }
+    if (store.tool === 'tiles') {
+      cursor = e.target === cv ? [wx, wz] : null;
+      if (tileRect) { tileRect[1] = [wx / 8, wz / 8]; draw(); return; }
+      if (tilePaint) { TL.paintAt(wx / 8, wz / 8); return; }
       draw();
       return;
     }
@@ -256,6 +322,12 @@ export function init2d(canvas, statusPos, tipEl) {
 
   window.addEventListener('mouseup', () => {
     if (strokeActive()) { endStroke(); return; }
+    if (tileRect) {
+      TL.fillRect(tileRect[0][0], tileRect[0][1], tileRect[1][0], tileRect[1][1]);
+      tileRect = null;
+      return;
+    }
+    if (tilePaint) { tilePaint = false; TL.T.cloneDelta = null; return; }
     if (drag && drag.empty && !drag.moved) {
       // click on empty ground: copy exact coordinates
       const l = store.lvl, wx = drag.wx, wz = drag.wz;

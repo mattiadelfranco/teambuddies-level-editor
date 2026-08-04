@@ -4,6 +4,14 @@ import * as V3 from './view3d.js';
 import { initUI, setViewButtons, setTool } from './ui.js';
 import { deleteSel } from './items.js';
 import { brush, strokeActive } from './terrain.js';
+import * as TL from './tiles.js';
+
+// repainting the 3D ground texture is ~10ms: throttle during paint drags
+let composeTimer = 0;
+function scheduleCompose() {
+  if (composeTimer) return;
+  composeTimer = setTimeout(() => { composeTimer = 0; V3.composeGround(); }, 150);
+}
 
 const $ = id => document.getElementById(id);
 
@@ -33,16 +41,18 @@ async function boot() {
 
   store.onChange(what => {
     if (what === 'level') {
-      loadGround();
+      loadGround(() => V3.composeGround());
       V3.reload();
+      TL.loadAtlas(store.entry).then(() => store.emit('atlas')).catch(() => {});
       if (sel.value !== store.entry) sel.value = store.entry;
     }
     if (what === 'saved') {           // baseline reloaded from disk
-      reloadGround();
-      V3.refreshTerrain();
+      reloadGround(() => V3.composeGround());
+      V3.refreshTerrainMesh();
     }
     if (what === 'layers') V3.composeGround();
     if (what === 'hm') V3.refreshTerrainMesh();
+    if (what === 'tiles') scheduleCompose();
     if (store.view.mode === '2d') draw();
   });
 
@@ -60,6 +70,7 @@ async function boot() {
       else if (store.tool !== 'select') setTool('select');
     } else if (e.key === 'v' || e.key === 'V') setTool('select');
     else if (e.key === 'h' || e.key === 'H') setTool('height');
+    else if (e.key === 't' || e.key === 'T') setTool('tiles');
     else if ((e.key === '[' || e.key === ']') && store.tool === 'height' && !strokeActive()) {
       brush.radius = Math.max(1, Math.min(8, brush.radius + (e.key === ']' ? 0.5 : -0.5)));
       document.getElementById('br-radius').value = brush.radius;

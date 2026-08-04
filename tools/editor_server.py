@@ -489,6 +489,32 @@ def apply_edits(entry, edits):
         if bytes(d[off_hm:off_hm + len(hm)]) != hm:
             d[off_hm:off_hm + len(hm)] = hm
 
+    # array tile 64x64x28B (base64): dimensione fissa -> in place. I tile
+    # RIDIPINTI che avevano voci di animazione (frecce pedane, acqua) perdono
+    # le loro desc (come _erase_pad): un tile dipinto a mano non deve piu'
+    # animarsi col frame di un'altra texture. Applicato PRIMA delle pedane.
+    if "tiles" in edits:
+        tl = base64.b64decode(edits["tiles"])
+        if len(tl) != 4096 * 28:
+            raise ValueError(f"tiles: dimensione {len(tl)} != {4096 * 28}")
+        _, _, _, off_tiles = _tiles_layout(d)
+        old = bytes(d[off_tiles:off_tiles + len(tl)])
+        if old != tl:
+            changed = {i for i in range(4096)
+                       if old[i * 28:(i + 1) * 28] != tl[i * 28:(i + 1) * 28]}
+            d[off_tiles:off_tiles + len(tl)] = tl
+            al = _anim_desc(d, off_tiles)
+            if al:
+                o2, n2 = al
+                keep = []
+                for i in range(n2):
+                    pp = o2 + 2 + i * 16
+                    if struct.unpack_from("<H", d, pp)[0] not in changed:
+                        keep.append(bytes(d[pp:pp + 16]))
+                if len(keep) != n2:
+                    d[o2 + 2:o2 + 2 + n2 * 16] = b"".join(keep)
+                    struct.pack_into("<H", d, o2, len(keep))
+
     # istanze, lista completa [[modello, x, alt, z, e, r1, r2], ...]: sostituisce
     # tutta la lista (aggiunta/rimozione/spostamento in un colpo solo; il resto
     # del PND si legge in sequenza, quindi lo splice basta)
@@ -713,6 +739,14 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "unknown level"}, 404)
             try:
                 return self._json(tb_level.parse_level(entry))
+            except Exception as e:
+                return self._json({"err": str(e)}, 500)
+        if self.path.startswith("/api/atlas/"):
+            entry = self.path.split("/")[-1].split("?")[0]
+            if not (entry.isdigit() and os.path.isdir(os.path.join(BIND, entry))):
+                return self._json({"err": "unknown level"}, 404)
+            try:
+                return self._json(tb_level.atlas(entry))
             except Exception as e:
                 return self._json({"err": str(e)}, 500)
         if self.path.startswith("/api/3d/"):

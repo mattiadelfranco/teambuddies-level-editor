@@ -37,11 +37,26 @@
   <span class="hint">4 units = ½ tile · AI paths (PTH) are NOT regenerated</span>
 </div>
 
+<div id="subbar-tiles" style="display:none">
+  <div class="seg">
+    <button data-tm="paint" class="on" title="Paint with the selected tile (Alt = eyedropper)">🖌 Paint</button
+    ><button data-tm="fill" title="Drag a rectangle to fill (2D)">▧ Fill</button
+    ><button data-tm="clone" title="Alt-click sets the source, then paint to copy">⧉ Clone</button
+    ><button data-tm="pick" title="Eyedropper: read a tile into the stamp">⌖ Pick</button>
+  </div>
+  <label>Size <input id="tl-size" type="range" min="1" max="4" value="1">
+    <span id="tl-sizev">1</span></label>
+  <button id="tl-rot" title="Rotate the stamp 90°">⟳</button>
+  <button id="tl-mir" title="Mirror the stamp">⇋</button>
+  <canvas id="tl-stamp" width="64" height="64" title="current stamp"></canvas>
+  <span class="hint">pick tiles in the Palette tab · ⚡ dots = animated tiles (repainting removes their animation)</span>
+</div>
+
 <div id="body">
   <nav id="tools">
     <button id="t_select" class="tool on" title="Select / move (V)">◇</button>
     <button id="t_height" class="tool" title="Sculpt heights (H)">▲</button>
-    <button class="tool off" title="Tiles — coming in phase 2">▦</button>
+    <button id="t_tiles" class="tool" title="Paint tiles (T)">▦</button>
   </nav>
 
   <main id="viewport">
@@ -54,9 +69,28 @@
     <div id="tabs">
       <button data-tab="inspector" class="on">Inspector</button>
       <button data-tab="catalog">Catalog</button>
+      <button data-tab="palette">Palette</button>
       <button data-tab="level">Level</button>
       <button data-tab="layers">Layers</button>
     </div>
+
+    <section id="tab-palette" class="tab">
+      <h3>Texture atlas</h3>
+      <div class="row">
+        <label>CLUT</label>
+        <select id="pl-clut"><option value="-1">auto (per cell)</option></select>
+      </div>
+      <canvas id="pl-atlas" width="512" height="128"></canvas>
+      <div class="hint">Click a cell to select it. The 64×64 cells are the
+        game's own tile art; “auto” uses the CLUT this level pairs with the
+        cell most often.</div>
+      <div class="row">
+        <label>Stamp</label><canvas id="pl-stamp" width="48" height="48"></canvas>
+        <button id="pl-rot" title="Rotate 90°">⟳</button>
+        <button id="pl-mir" title="Mirror">⇋</button>
+        <span id="pl-info" class="hint"></span>
+      </div>
+    </section>
 
     <section id="tab-inspector" class="tab on">
       <div id="ins-empty" class="hint">Nothing selected — click a marker in the

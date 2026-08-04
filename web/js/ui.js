@@ -3,6 +3,7 @@ import { store, ZONE_PRESETS } from './store.js';
 import * as It from './items.js';
 import { modelColor } from './view2d.js';
 import { brush } from './terrain.js';
+import * as TL from './tiles.js';
 
 const $ = id => document.getElementById(id);
 const isAuto = name => /auto/i.test(name || '');
@@ -11,9 +12,99 @@ export function setTool(tool) {
   store.apply(s => { s.tool = tool; }, 'tool');
   $('t_select').classList.toggle('on', tool === 'select');
   $('t_height').classList.toggle('on', tool === 'height');
+  $('t_tiles').classList.toggle('on', tool === 'tiles');
   $('subbar').style.display = tool === 'height' ? 'flex' : 'none';
+  $('subbar-tiles').style.display = tool === 'tiles' ? 'flex' : 'none';
   if (tool === 'height' && !store.view.layers.hm)
     store.apply(s => { s.view.layers.hm = true; }, 'layers');
+  if (tool === 'tiles') {
+    const tabBtn = document.querySelector('#tabs button[data-tab="palette"]');
+    if (tabBtn && !document.getElementById('tab-palette').classList.contains('on'))
+      tabBtn.click();
+    drawStamp();
+  }
+}
+
+// ---- palette ----
+function rotStamp() { TL.T.stamp.orient = (TL.T.stamp.orient & 4) | ((TL.T.stamp.orient + 1) & 3); store.emit('stamp'); }
+function mirStamp() { TL.T.stamp.orient ^= 4; store.emit('stamp'); }
+
+export function drawPalette() {
+  if (!TL.T.atlas) return;
+  // keep the CLUT dropdown in sync with this level's atlas
+  const n = TL.T.atlas.cluts.length, selEl = $('pl-clut');
+  if (selEl.options.length !== n + 1) {
+    const cur = selEl.value;
+    selEl.innerHTML = '<option value="-1">auto (per cell)</option>'
+      + Array.from({ length: n }, (_, i) => `<option value="${i}">${i}</option>`).join('');
+    selEl.value = [...selEl.options].some(o => o.value === cur) ? cur : '-1';
+  }
+  const cx = TL.cellsX(), rows = TL.T.atlas.h >> 6;
+  const cvp = $('pl-atlas');
+  cvp.width = cx * 32; cvp.height = rows * 32;
+  const x = cvp.getContext('2d');
+  const clutSel = +($('pl-clut').value || -1);
+  const tmp = document.createElement('canvas');
+  tmp.width = tmp.height = 64;
+  for (let cell = 0; cell < cx * rows; cell++) {
+    const clut = clutSel < 0 ? TL.autoClutFor(cell) : clutSel;
+    tmp.getContext('2d').putImageData(TL.renderCell(cell, clut, 0), 0, 0);
+    x.imageSmoothingEnabled = false;
+    x.drawImage(tmp, (cell % cx) * 32, (cell / cx | 0) * 32, 32, 32);
+  }
+  // highlight the selected cell
+  x.strokeStyle = '#fff'; x.lineWidth = 2;
+  x.strokeRect((TL.T.stamp.cell % cx) * 32 + 1, (TL.T.stamp.cell / cx | 0) * 32 + 1, 30, 30);
+  drawStamp();
+}
+
+export function drawStamp() {
+  if (!TL.T.atlas) return;
+  const im = TL.renderCell(TL.T.stamp.cell, TL.stampClut(), TL.T.stamp.orient);
+  for (const id of ['pl-stamp', 'tl-stamp']) {
+    const c = $(id);
+    const tmp = document.createElement('canvas');
+    tmp.width = tmp.height = 64;
+    tmp.getContext('2d').putImageData(im, 0, 0);
+    const x = c.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    x.clearRect(0, 0, c.width, c.height);
+    x.drawImage(tmp, 0, 0, c.width, c.height);
+  }
+  $('pl-info').textContent = `cell ${TL.T.stamp.cell} · clut ${TL.stampClut()}`
+    + (TL.T.stamp.autoClut ? ' (auto)' : '') + ` · orient ${TL.T.stamp.orient}`;
+}
+
+function initPalette() {
+  $('pl-atlas').onclick = e => {
+    const r = $('pl-atlas').getBoundingClientRect();
+    const cx = TL.cellsX();
+    const cell = Math.floor((e.clientY - r.top) / r.height * (TL.T.atlas.h >> 6)) * cx
+               + Math.floor((e.clientX - r.left) / r.width * cx);
+    TL.T.stamp.cell = cell;
+    const clutSel = +($('pl-clut').value || -1);
+    TL.T.stamp.autoClut = clutSel < 0;
+    if (clutSel >= 0) TL.T.stamp.clut = clutSel;
+    store.emit('stamp');
+  };
+  $('pl-clut').onchange = () => {
+    const v = +$('pl-clut').value;
+    TL.T.stamp.autoClut = v < 0;
+    if (v >= 0) TL.T.stamp.clut = v;
+    drawPalette();
+    store.emit('stamp');
+  };
+  $('pl-rot').onclick = rotStamp;
+  $('pl-mir').onclick = mirStamp;
+  $('tl-rot').onclick = rotStamp;
+  $('tl-mir').onclick = mirStamp;
+  document.querySelectorAll('#subbar-tiles [data-tm]').forEach(b => b.onclick = () => {
+    document.querySelectorAll('#subbar-tiles [data-tm]').forEach(o =>
+      o.classList.toggle('on', o === b));
+    TL.T.mode = b.dataset.tm;
+    if (b.dataset.tm !== 'clone') TL.T.cloneSrc = null;
+  });
+  $('tl-size').oninput = e => { TL.T.size = +e.target.value; $('tl-sizev').textContent = e.target.value; };
 }
 
 export function initUI(onViewMode) {
@@ -55,6 +146,7 @@ export function initUI(onViewMode) {
   $('br-strength').oninput = e => { brush.strength = +e.target.value; $('br-strengthv').textContent = e.target.value; };
   $('br-value').onchange = e => { brush.value = +e.target.value | 0; };
   $('br-snap').onchange = e => { brush.snap4 = e.target.checked; };
+  initPalette();
 
   // view / layers
   $('ly-mx').onchange = e => store.apply(s => { s.view.mirrorX = e.target.checked; }, 'view');
@@ -127,6 +219,7 @@ export function initUI(onViewMode) {
     if (what === 'level') onLevel();
     if (what === 'recipes' || what === 'level') renderRecipes();
     if (what === 'view' || what === 'layers' || what === 'level') syncViewControls();
+    if (what === 'stamp' || what === 'atlas') drawPalette();
     refreshInspector();
     $('dirty').textContent = store.dirty ? '● unsaved changes' : '';
     $('st-sel').textContent = store.sel ? selLabel() : '';

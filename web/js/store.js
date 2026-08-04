@@ -1,6 +1,12 @@
 // Single source of truth for the editor. Every mutation goes through
 // store.apply(fn) so both views stay in sync (and undo can hook in later).
-import { api, b64i16 } from './api.js';
+import { api, b64i16, b64u8 } from './api.js';
+
+function u8b64(a) {
+  let s = '';
+  for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
+  return btoa(s);
+}
 
 export const ZONE_PRESETS = {
   'rich (t4, every 30)':      [4, 0, 0, 0, -30, -30, 30, 3600, 8, 0],
@@ -45,7 +51,7 @@ export const store = {
   // every mutation goes through here
   apply(fn, what = 'edit') {
     fn(this);
-    if (what === 'edit' || what === 'hm') this.dirty = true;
+    if (what === 'edit' || what === 'hm' || what === 'tiles') this.dirty = true;
     this.emit(what);
   },
 
@@ -77,6 +83,8 @@ export const store = {
         inst: l.inst.map(r => r.slice()),
         hm: b64i16(this.lvl.hm),          // editable heightmap (65x65 s16)
         hmTouched: false,
+        tiles: b64u8(this.lvl.tiles),     // editable tile array (4096 x 28B)
+        tilesTouched: false,
       };
     }
     this.ed = this.edits[entry];
@@ -110,22 +118,19 @@ export const store = {
     if (this.rec.touched) edits.recipes = { set: this.rec.set, pairs: this.rec.pairs };
     if (ed.tcountTouched) edits.teamCount = ed.tcount;
     if (ed.extra) edits.extra = ed.extra;
-    if (ed.hmTouched) {
-      // 65x65 s16 LE -> base64
-      const b = new Uint8Array(ed.hm.buffer.slice(0));
-      let s = '';
-      for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
-      edits.hm = btoa(s);
-    }
+    if (ed.hmTouched) edits.hm = u8b64(new Uint8Array(ed.hm.buffer.slice(0)));
+    if (ed.tilesTouched) edits.tiles = u8b64(ed.tiles);
     const r = await api.save(this.entry, edits);
     if (r.ok) {
       this.dirty = false;
       if (r.recipes) this.rec.touched = false;
       ed.hmTouched = false;
+      ed.tilesTouched = false;
       this.say('✓ saved to mods/' + this.entry + (r.recipes ? ' (+recipe set ' + r.recipes.set + ')' : ''));
       // reload from disk so the baseline matches what was written
       this.lvl = await api.level(this.entry);
-      ed.hm.set(b64i16(this.lvl.hm));     // keep the shared reference alive
+      ed.hm.set(b64i16(this.lvl.hm));     // keep the shared references alive
+      ed.tiles.set(b64u8(this.lvl.tiles));
       this.emit('saved');
     } else {
       this.say('SAVE ERROR: ' + (r.err || ''));

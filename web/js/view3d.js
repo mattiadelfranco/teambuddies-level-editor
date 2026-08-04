@@ -6,6 +6,7 @@ import { store } from './store.js';
 import { items, moveItem, heightAt } from './items.js';
 import { api, b64u8 } from './api.js';
 import { brush, beginStroke, moveStroke, endStroke, strokeActive } from './terrain.js';
+import * as TL from './tiles.js';
 
 const TCOLS = [[231, 76, 60], [52, 152, 219], [46, 204, 113], [241, 196, 15],
   [155, 89, 182], [230, 126, 34], [26, 188, 156], [149, 165, 166]];
@@ -177,7 +178,9 @@ export function composeGround() {
   const c = document.createElement('canvas');
   c.width = c.height = 2048;
   const x = c.getContext('2d');
-  if (v.ground && E3.groundImg) x.drawImage(E3.groundImg, 0, 0, 2048, 2048);
+  const gc = TL.groundCanvas();
+  if (v.ground && gc) x.drawImage(gc, 0, 0, 2048, 2048);
+  else if (v.ground && E3.groundImg) x.drawImage(E3.groundImg, 0, 0, 2048, 2048);
   else { x.fillStyle = v.ground ? '#1c2b1c' : '#3a4048'; x.fillRect(0, 0, 2048, 2048); }
   if (v.hm) {
     const hm = store.hm;
@@ -498,6 +501,27 @@ function input() {
       }
       return;
     }
+    if (store.tool === 'tiles') {
+      const g = groundHit(mx, my, c.clientWidth, c.clientHeight);
+      if (g && isFinite(g[0])) {
+        if (TL.T.mode === 'pick' || e.altKey) {
+          TL.readTile(g[0], g[1]);
+          store.emit('stamp');
+        } else if (TL.T.mode === 'clone') {
+          if (!TL.T.cloneSrc) { TL.T.cloneSrc = [g[0], g[1]]; store.say('clone source set.'); }
+          else {
+            TL.T.cloneDelta = [Math.floor(TL.T.cloneSrc[0]) - Math.floor(g[0]),
+                               Math.floor(TL.T.cloneSrc[1]) - Math.floor(g[1])];
+            mode = 'tilepaint';
+            TL.paintAt(g[0], g[1]);
+          }
+        } else if (TL.T.mode === 'paint') {
+          mode = 'tilepaint';
+          TL.paintAt(g[0], g[1]);
+        } else store.say('fill rect works in the 2D view — use paint here.');
+      }
+      return;
+    }
     const it = pick3(mx, my);
     if (it) {
       mode = 'move';
@@ -520,6 +544,11 @@ function input() {
         E3.brushPos = g;
         moveStroke(Math.max(0, Math.min(64, g[0])), Math.max(0, Math.min(64, g[1])), e.altKey);
       }
+      return;
+    }
+    if (mode === 'tilepaint') {
+      const g = groundHit(mx, my, c.clientWidth, c.clientHeight);
+      if (g && isFinite(g[0])) TL.paintAt(g[0], g[1]);
       return;
     }
     if (!mode) return;
@@ -547,6 +576,7 @@ function input() {
   });
   window.addEventListener('mouseup', e => {
     if (mode === 'sculpt') { endStroke(); mode = null; return; }
+    if (mode === 'tilepaint') { TL.T.cloneDelta = null; mode = null; return; }
     if (mode === 'orbit' && moved < 5 && E3.on && e.target === c) {
       const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
       const g = groundHit(mx, my, c.clientWidth, c.clientHeight);

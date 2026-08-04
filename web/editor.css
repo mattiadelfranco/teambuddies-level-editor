@@ -15,12 +15,18 @@ body {
 .grow { flex: 1; }
 #dirty { color: #ffa502; font-size: 12px; }
 
-/* ---- tool sub-bar ---- */
-#subbar {
+/* ---- tool sub-bars ---- */
+#subbar, #subbar-tiles {
   display: flex; align-items: center; gap: 14px; padding: 5px 12px;
   background: #171a20; border-bottom: 1px solid #2a2e36; font-size: 12px;
 }
-#subbar input[type=range] { width: 90px; }
+#subbar input[type=range], #subbar-tiles input[type=range] { width: 90px; }
+#tl-stamp { width: 28px; height: 28px; image-rendering: pixelated;
+  border: 1px solid #3a3f4a; border-radius: 4px; background: #000; }
+#pl-atlas { width: 100%; image-rendering: pixelated; border: 1px solid #3a3f4a;
+  border-radius: 4px; cursor: crosshair; background: #000; }
+#pl-stamp { width: 48px; height: 48px; image-rendering: pixelated;
+  border: 1px solid #3a3f4a; border-radius: 4px; background: #000; }
 
 /* ---- main area ---- */
 #body { flex: 1; display: flex; min-height: 0; }
