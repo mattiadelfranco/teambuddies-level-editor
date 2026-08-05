@@ -172,13 +172,18 @@ def parse_level(entry):
                 lvl["animTiles"] = sorted({struct.unpack_from("<H", d, o2 + 2 + k * 16)[0]
                                            for k in range(n2)})
 
-    # ---- PTH (AI walkability, never modded) ----
-    pths = glob.glob(os.path.join(BIND, entry, "*.PTH"))
+    # ---- PTH (AI walkability): the 128x128 half-tile grid starts at OFFSET 0
+    # (no header!); the trailing 32B (112B on 0543) are an unknown footer.
+    # bit 16 = blocked for the AI. Modded copy if present. Calibrated by
+    # cross-correlating the blocked bit with heightmap steepness on 42 levels:
+    # grid-at-0 aligns (overlap ~0.95), grid-at-32 is shifted by 16 tiles. ----
+    pths = glob.glob(os.path.join(folder, "*.PTH")) \
+        or glob.glob(os.path.join(BIND, entry, "*.PTH"))
     lvl["pth"] = None
     if pths:
         pd = open(pths[0], "rb").read()
-        if len(pd) == 16416:
-            lvl["pth"] = _b64(pd[32:])
+        if len(pd) >= 16384:
+            lvl["pth"] = _b64(pd[:16384])
     return lvl
 
 

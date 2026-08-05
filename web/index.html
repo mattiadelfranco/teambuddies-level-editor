@@ -36,7 +36,19 @@
     <input id="br-value" type="number" value="0" step="4" style="width:60px"></label>
   <label title="Vanilla terrain uses steps of 4 (= half a tile)">
     <input id="br-snap" type="checkbox" checked> snap 4</label>
-  <span class="hint">4 units = ½ tile · AI paths (PTH) are NOT regenerated</span>
+  <span class="hint">4 units = ½ tile · new walls/cliffs? update the AI grid with the 🧭 tool</span>
+</div>
+
+<div id="subbar-ai" style="display:none">
+  <div class="seg">
+    <button data-am="block" class="on" title="Mark cells the AI must NOT enter (LMB; hold Alt to free)">⛔ Block</button
+    ><button data-am="free" title="Mark cells the AI may walk through (Alt = block)">✓ Free</button>
+  </div>
+  <label>Size <input id="ai-size" type="range" min="1" max="6" value="2">
+    <span id="ai-sizev">2</span></label>
+  <button id="ai-auto" title="Scan the heightmap and BLOCK every cell whose tile has a height step ≥ 10 (steep wall). Add-only: never frees vanilla blocks (water stays blocked).">⚡ Auto from slopes</button>
+  <span class="hint">red = AI can't walk (bit 16) · yellow = vanilla AI hints (untouched) ·
+    the PLAYER ignores this grid — only enemies/animals/AI buddies path with it</span>
 </div>
 
 <div id="subbar-tiles" style="display:none">
@@ -64,6 +76,7 @@
     <button id="t_select" class="tool on" title="Select / move (V)">◇</button>
     <button id="t_height" class="tool" title="Sculpt heights (H)">▲</button>
     <button id="t_tiles" class="tool" title="Paint tiles (T)">▦</button>
+    <button id="t_ai" class="tool" title="AI walk grid (A) — where the computer can walk">🧭</button>
   </nav>
 
   <main id="viewport">
@@ -200,7 +213,8 @@
       <h3>Layers</h3>
       <label><input type="checkbox" id="ly-ground" checked> Ground texture</label>
       <label><input type="checkbox" id="ly-hm"> Heightmap</label>
-      <label><input type="checkbox" id="ly-pth"> AI paths (PTH)</label>
+      <label title="The grid the ENGINE'S AI uses to path (enemies, animals, AI buddies). Red = blocked cells (bit 16) — edit with the 🧭 tool; yellow = vanilla AI hints (encoding unknown, never touched). The player ignores this grid.">
+        <input type="checkbox" id="ly-pth"> AI walk grid (PTH)</label>
       <label><input type="checkbox" id="ly-obj" checked> Objects (PND)</label>
       <h3>PLD sections</h3>
       <div id="ly-secs"></div>

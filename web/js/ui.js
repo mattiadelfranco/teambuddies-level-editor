@@ -6,6 +6,7 @@ import { brush } from './terrain.js';
 import * as TL from './tiles.js';
 import * as CAT from './catalog.js';
 import * as IM from './atlasimport.js';
+import * as AI from './aiwalk.js';
 
 const $ = id => document.getElementById(id);
 const isAuto = name => /auto/i.test(name || '');
@@ -15,10 +16,16 @@ export function setTool(tool) {
   $('t_select').classList.toggle('on', tool === 'select');
   $('t_height').classList.toggle('on', tool === 'height');
   $('t_tiles').classList.toggle('on', tool === 'tiles');
+  $('t_ai').classList.toggle('on', tool === 'ai');
   $('subbar').style.display = tool === 'height' ? 'flex' : 'none';
   $('subbar-tiles').style.display = tool === 'tiles' ? 'flex' : 'none';
+  $('subbar-ai').style.display = tool === 'ai' ? 'flex' : 'none';
   if (tool === 'height' && !store.view.layers.hm)
     store.apply(s => { s.view.layers.hm = true; }, 'layers');
+  if (tool === 'ai' && !store.view.layers.pth)
+    store.apply(s => { s.view.layers.pth = true; }, 'layers');
+  if (tool === 'ai' && !store.ed.pth)
+    store.say('this level has no PTH file — AI grid editing unavailable.');
   if (tool === 'tiles') {
     const tabBtn = document.querySelector('#tabs button[data-tab="palette"]');
     if (tabBtn && !document.getElementById('tab-palette').classList.contains('on'))
@@ -145,6 +152,21 @@ export function initUI(onViewMode) {
   $('t_select').onclick = () => setTool('select');
   $('t_height').onclick = () => setTool('height');
   $('t_tiles').onclick = () => setTool('tiles');
+  $('t_ai').onclick = () => setTool('ai');
+  document.querySelectorAll('#subbar-ai [data-am]').forEach(b => b.onclick = () => {
+    document.querySelectorAll('#subbar-ai [data-am]').forEach(o =>
+      o.classList.toggle('on', o === b));
+    AI.A.mode = b.dataset.am;
+  });
+  $('ai-size').oninput = e => { AI.A.size = +e.target.value; $('ai-sizev').textContent = e.target.value; };
+  $('ai-auto').onclick = () => {
+    store.beginGesture();
+    const n = AI.autoFromSlopes();
+    store.endGesture();
+    store.say(n ? `⚡ blocked ${n} half-tile cells under steep slopes (add-only: `
+      + 'vanilla water/cliff blocks untouched). Check the red layer, free gates with ✓ Free.'
+      : 'no new steep cells to block — the AI grid already covers the current terrain.');
+  };
   document.querySelectorAll('#subbar [data-bm]').forEach(b => b.onclick = () => {
     document.querySelectorAll('#subbar [data-bm]').forEach(x =>
       x.classList.toggle('on', x === b));

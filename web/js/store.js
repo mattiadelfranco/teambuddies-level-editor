@@ -62,6 +62,7 @@ export const store = {
       inst: ed.inst.map(r => r.slice()),
       hm: ed.hm.slice(), hmTouched: ed.hmTouched,
       tiles: ed.tiles.slice(), tilesTouched: ed.tilesTouched,
+      pth: ed.pth ? ed.pth.slice() : null, pthTouched: ed.pthTouched,
       addModels: ed.addModels.map(m => ({ ...m })),
       rec: { set: this.rec.set, pairs: this.rec.pairs.map(p => p.slice()), touched: this.rec.touched },
       sel: this.sel ? { ...this.sel } : null, dirty: this.dirty,
@@ -82,13 +83,18 @@ export const store = {
     for (let i = 0; i < ed.tiles.length; i++)
       if (ed.tiles[i] !== s.tiles[i]) { tilesChanged = true; break; }
     ed.tiles.set(s.tiles); ed.tilesTouched = s.tilesTouched;
+    let pthChanged = false;
+    if (ed.pth && s.pth) {
+      pthChanged = ed.pth.some((v, i) => v !== s.pth[i]);
+      ed.pth.set(s.pth); ed.pthTouched = s.pthTouched;
+    }
     ed.addModels = s.addModels.map(m => ({ ...m }));
     this.lvl.models = this.lvl.models.slice(0, ed.baseModelCount)
       .concat(ed.addModels.map(m => m.name));
     this.rec = { set: s.rec.set, pairs: s.rec.pairs.map(p => p.slice()), touched: s.rec.touched };
     this.sel = s.sel ? { ...s.sel } : null;
     this.dirty = s.dirty;
-    return { hmChanged, tilesChanged };
+    return { hmChanged, tilesChanged, pthChanged };
   },
   pushUndo() {
     if (!this.ed) return;
@@ -111,6 +117,7 @@ export const store = {
     this.emit('undo');
     if (ch.hmChanged) this.emit('hm-restored');
     if (ch.tilesChanged) this.emit('tiles-restored');
+    if (ch.pthChanged) this.emit('pth');
     this.say('↶ undo');
   },
   redo() {
@@ -122,12 +129,13 @@ export const store = {
     this.emit('undo');
     if (ch.hmChanged) this.emit('hm-restored');
     if (ch.tilesChanged) this.emit('tiles-restored');
+    if (ch.pthChanged) this.emit('pth');
     this.say('↷ redo');
   },
 
   // every mutation goes through here
   apply(fn, what = 'edit') {
-    const dirties = what === 'edit' || what === 'hm' || what === 'tiles';
+    const dirties = what === 'edit' || what === 'hm' || what === 'tiles' || what === 'pth';
     if (dirties && !this._gesture) this.pushUndo();
     fn(this);
     if (dirties) this.dirty = true;
@@ -164,6 +172,8 @@ export const store = {
         hmTouched: false,
         tiles: b64u8(this.lvl.tiles),     // editable tile array (4096 x 28B)
         tilesTouched: false,
+        pth: this.lvl.pth ? b64u8(this.lvl.pth) : null,  // AI walk grid 128x128
+        pthTouched: false,
         addModels: [],                    // models imported from other levels
         baseModelCount: this.lvl.models.length,
       };
@@ -205,6 +215,7 @@ export const store = {
     if (ed.extra) edits.extra = ed.extra;
     if (ed.hmTouched) edits.hm = u8b64(new Uint8Array(ed.hm.buffer.slice(0)));
     if (ed.tilesTouched) edits.tiles = u8b64(ed.tiles);
+    if (ed.pthTouched && ed.pth) edits.pth = u8b64(ed.pth);
     if (ed.addModels.length) edits.addModels = ed.addModels;
     const r = await api.save(this.entry, edits);
     if (r.ok) {
@@ -212,11 +223,13 @@ export const store = {
       if (r.recipes) this.rec.touched = false;
       ed.hmTouched = false;
       ed.tilesTouched = false;
+      ed.pthTouched = false;
       this.say('✓ saved to mods/' + this.entry + (r.recipes ? ' (+recipe set ' + r.recipes.set + ')' : ''));
       // reload from disk so the baseline matches what was written
       this.lvl = await api.level(this.entry);
       ed.hm.set(b64i16(this.lvl.hm));     // keep the shared references alive
       ed.tiles.set(b64u8(this.lvl.tiles));
+      if (ed.pth && this.lvl.pth) ed.pth.set(b64u8(this.lvl.pth));
       ed.addModels = [];                  // imports are now part of the level
       ed.baseModelCount = this.lvl.models.length;
       this.emit('saved');

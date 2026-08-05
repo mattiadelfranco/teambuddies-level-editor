@@ -39,15 +39,12 @@ def _tiles_layout(d):
     return off_extra, extra_cnt, off_hm, off_tiles
 
 
-def _repaint_pad(d, off_hm, off_tiles, old_c, new_c):
-    """Sposta i 4 tile dipinti della pedana da old_c a new_c (centri tile x.5)
-    e spiana il terreno sotto la nuova posizione."""
+def _repaint_pads(d, off_hm, off_tiles, moves):
+    """Sposta i 4x4 tile dipinti delle pedane [(old_c, new_c), ...] (centri
+    tile x.5) e spiana il terreno sotto le nuove posizioni. Gli spostamenti
+    sono SIMULTANEI: tutti i blocchi vengono letti dallo stato pre-edit, così
+    due pedane che si scambiano di posto non si mangiano i tile a vicenda."""
     from collections import Counter
-
-    def block(c):
-        # impronta completa della pedana: 4x4 (cornice di frecce + centro 2x2)
-        x, z = int(c[0] - 0.5) - 1, int(c[1] - 0.5) - 1
-        return [(x + i, z + j) for j in range(4) for i in range(4)]
 
     def rd(x, z):
         o = off_tiles + (z * 64 + x) * 28
@@ -57,50 +54,56 @@ def _repaint_pad(d, off_hm, off_tiles, old_c, new_c):
         o = off_tiles + (z * 64 + x) * 28
         d[o:o + 28] = rec
 
-    old_b, new_b = block(old_c), block(new_c)
-    if any(not (0 <= x < 64 and 0 <= z < 64) for x, z in old_b + new_b):
+    moves = [(_pad_block(o), _pad_block(n)) for o, n in moves]
+    moves = [m for m in moves
+             if all(0 <= x < 64 and 0 <= z < 64 for x, z in m[0] + m[1])]
+    if not moves:
         return
-    pad_recs = [rd(x, z) for x, z in old_b]
-    # tappo d'erba sul vecchio blocco, pedana dipinta sul nuovo
-    x0, z0 = old_b[0]
-    per = [rd(x, z) for x in range(x0 - 1, x0 + 5) for z in range(z0 - 1, z0 + 5)
-           if (x, z) not in old_b and 0 <= x < 64 and 0 <= z < 64]
-    filler = Counter(per).most_common(1)[0][0]
-    for x, z in old_b:
-        wr(x, z, filler)
-    for (x, z), rec in zip(new_b, pad_recs):
-        wr(x, z, rec)
-    # rimappa le VOCI DI ANIMAZIONE (frecce animate del centro pedana):
-    # coda a tiles+131072 (il motore riserva 32B/tile): [s16 n_tex][n_tex*12B]
-    # [u16 n_desc][n_desc*16B, campo 0 = indice tile]
-    nx0, nz0 = new_b[0]
-    anim = off_tiles + 131072
-    if anim + 2 <= len(d):
-        n1 = struct.unpack_from("<h", d, anim)[0]
-        o2 = anim + 2 + max(n1, 0) * 12
-        if 0 <= n1 < 2000 and o2 + 2 <= len(d):
-            n2 = struct.unpack_from("<H", d, o2)[0]
-            old_map = {t: i for i, t in enumerate(old_b)}
-            for i in range(min(n2, 2000)):
-                pp = o2 + 2 + i * 16
-                if pp + 2 > len(d):
-                    break
-                idx = struct.unpack_from("<H", d, pp)[0]
-                t = (idx % 64, idx // 64)
-                if t in old_map:
-                    k = old_map[t]
-                    nx, nz = new_b[k]
-                    struct.pack_into("<H", d, pp, nz * 64 + nx)
-    # spiana i 9 vertici del nuovo blocco all'altezza mediana
-    vx, vz = new_b[0]
-    hs = []
-    for zz in range(vz, vz + 5):
-        for xx in range(vx, vx + 5):
-            hs.append(struct.unpack_from("<h", d, off_hm + (zz * 65 + xx) * 2)[0])
-    med = sorted(hs)[len(hs) // 2]
-    for zz in range(vz, vz + 5):
-        for xx in range(vx, vx + 5):
-            struct.pack_into("<h", d, off_hm + (zz * 65 + xx) * 2, med)
+    # snapshot pre-edit: tile dipinti + tappo d'erba di ogni pedana (il
+    # perimetro esclude i vecchi blocchi di TUTTE le pedane in movimento)
+    old_all = {t for ob, _ in moves for t in ob}
+    snap = []
+    for ob, nb in moves:
+        recs = [rd(x, z) for x, z in ob]
+        x0, z0 = ob[0]
+        per = [rd(x, z) for x in range(x0 - 1, x0 + 5)
+               for z in range(z0 - 1, z0 + 5)
+               if (x, z) not in old_all and 0 <= x < 64 and 0 <= z < 64]
+        filler = Counter(per).most_common(1)[0][0] if per else recs[0]
+        snap.append((ob, nb, recs, filler))
+    # erba su tutti i vecchi blocchi, POI pedane sulle nuove posizioni
+    for ob, _, _, filler in snap:
+        for x, z in ob:
+            wr(x, z, filler)
+    for _, nb, recs, _ in snap:
+        for (x, z), rec in zip(nb, recs):
+            wr(x, z, rec)
+    # rimappa le VOCI DI ANIMAZIONE (frecce animate del centro pedana) in un
+    # passaggio unico su una mappa globale vecchio->nuovo: ogni desc viene
+    # toccata al massimo una volta (niente doppi rimbalzi negli scambi)
+    remap = {}
+    for ob, nb, _, _ in snap:
+        for t, nt in zip(ob, nb):
+            remap.setdefault(t, nt)
+    al = _anim_desc(d, off_tiles)
+    if al:
+        o2, n2 = al
+        for i in range(n2):
+            pp = o2 + 2 + i * 16
+            idx = struct.unpack_from("<H", d, pp)[0]
+            t = (idx % 64, idx // 64)
+            if t in remap:
+                nx, nz = remap[t]
+                struct.pack_into("<H", d, pp, nz * 64 + nx)
+    # spiana i vertici di ogni nuovo blocco all'altezza mediana
+    for _, nb, _, _ in snap:
+        vx, vz = nb[0]
+        hs = [struct.unpack_from("<h", d, off_hm + (zz * 65 + xx) * 2)[0]
+              for zz in range(vz, vz + 5) for xx in range(vx, vx + 5)]
+        med = sorted(hs)[len(hs) // 2]
+        for zz in range(vz, vz + 5):
+            for xx in range(vx, vx + 5):
+                struct.pack_into("<h", d, off_hm + (zz * 65 + xx) * 2, med)
 
 
 def _pad_block(c):
@@ -568,6 +571,21 @@ def apply_edits(entry, edits):
                     d[o2 + 2:o2 + 2 + n2 * 16] = b"".join(keep)
                     struct.pack_into("<H", d, o2, len(keep))
 
+    # PTH: griglia AI 128x128 u8 (16384B, base64) A OFFSET 0 del file — la
+    # CODA (32B, 112B su 0543: tabella ignota) resta intatta; dimensione
+    # fissa -> in place, skip se identica. bit 16 = cella bloccata per l'AI.
+    if "pth" in edits:
+        grid = base64.b64decode(edits["pth"])
+        if len(grid) != 128 * 128:
+            raise ValueError(f"pth: dimensione {len(grid)} != {128 * 128}")
+        pth_path = next((os.path.join(dst, f) for f in os.listdir(dst)
+                         if f.endswith(".PTH")), None)
+        if pth_path:
+            pd = bytearray(open(pth_path, "rb").read())
+            if len(pd) >= 16384 and bytes(pd[:16384]) != grid:
+                pd[:16384] = grid
+                open(pth_path, "wb").write(pd)
+
     # istanze, lista completa [[modello, x, alt, z, e, r1, r2], ...]: sostituisce
     # tutta la lista (aggiunta/rimozione/spostamento in un colpo solo; il resto
     # del PND si legge in sequenza, quindi lo splice basta)
@@ -615,11 +633,13 @@ def apply_edits(entry, edits):
             return (32 + st(ox) / 2, 32 + st(oz) / 2)
 
         recs = edits["s0"]
+        moves = []
         for i, r in enumerate(recs[:ocnt]):
             old_c = ocenter(i)
             new_c = (32 + r[0] / 2, 32 + r[1] / 2)
             if abs(old_c[0] - new_c[0]) > 0.01 or abs(old_c[1] - new_c[1]) > 0.01:
-                _repaint_pad(d, off_hm, off_tiles, old_c, new_c)
+                moves.append((old_c, new_c))
+        _repaint_pads(d, off_hm, off_tiles, moves)
         for i in range(len(recs), ocnt):
             d = _erase_pad(d, off_tiles, ocenter(i))
         if len(recs) > ocnt and ocnt > 0:
@@ -865,6 +885,44 @@ ISO_BIN = os.path.join(ROOT, "teambudd/rebuild.bin")
 ESTRATTO = os.path.join(ROOT, "teambudd/estratto")
 
 
+def _slot_headroom(base):
+    """Margine residuo (slot fisico - contenuto) delle entry moddate: finché
+    resta positivo il repack è in-place, il layout non cambia e il savestate
+    sopravvive alle build. Slot fisico = distanza tra i settori di tabella
+    consecutivi della BASE; contenuto = estensione reale nel DAT costruito."""
+    try:
+        def table(path):
+            with open(path, "rb") as f:
+                n = struct.unpack_from("<H", f.read(4), 2)[0]
+                f.seek(8)
+                raw = f.read(n * 8)
+            return [struct.unpack_from("<II", raw, i * 8) for i in range(n)]
+        tb, td = table(base), table(DAT)
+        fd = open(DAT, "rb")
+        out = []
+        for name in sorted(os.listdir(MODS)):
+            e = name.split(".")[0]
+            if not (e.isdigit() and int(e) < len(tb) - 1):
+                continue
+            i = int(e)
+            slot = (tb[i + 1][1] - tb[i][1]) * 2048
+            fd.seek(td[i][1] * 2048)
+            hdr = fd.read(8)
+            used = tb[i][0]
+            if hdr[:4] == b"BIND":                     # real extent, not table size
+                n = struct.unpack_from("<I", hdr, 4)[0]
+                t = fd.read(n * 40)
+                used = max(struct.unpack_from("<II", t, k * 40 + 32)[0]
+                           + struct.unpack_from("<II", t, k * 40 + 32)[1]
+                           for k in range(n)) if 0 < n < 10000 else used
+            out.append(f"  slot {e}: {used // 1024}KB usati / {slot // 1024}KB "
+                       f"({'margine ' + str((slot - used) // 1024) + 'KB' if used <= slot else '⚠ SFORATO'})")
+        fd.close()
+        return out
+    except Exception as ex:
+        return [f"(headroom check saltato: {ex})"]
+
+
 def build_iso():
     """Applica i mods al DAT e aggiorna la ISO. Base = BUDDIES.DAT.dev (slot
     espansi) se esiste. FAST PATH: se il layout non è cambiato (stessa size di
@@ -892,6 +950,7 @@ def build_iso():
     if "ricollocato" in rebuild_out:
         log.append("⚠ una entry ha sforato il suo slot: layout del DAT cambiato "
                    "(se succede spesso, aumenta lo slack: tools/tb_expand.py --level-slack 128)")
+    log += _slot_headroom(base)
     # --- fast path: patch in-place della ISO esistente ---
     if os.path.exists(ISO_BIN):
         try:
@@ -899,8 +958,8 @@ def build_iso():
             for name in ("BUDDIES.DAT", "ENG.BIN", "GAME.BIN"):
                 p = DAT if name == "BUDDIES.DAT" else os.path.join(ESTRATTO, name)
                 n += tb_fastiso.patch_file(ISO_BIN, name, open(p, "rb").read())
-            log.append(f"⚡ ISO aggiornata in-place ({n} settori riscritti): "
-                       "carica il savestate e prova il livello")
+            log.append(f"⚡ ISO aggiornata in-place ({n} settori riscritti) — "
+                       "✔ SAVESTATE ANCORA VALIDO: caricalo e prova il livello")
             return {"ok": True, "log": log}
         except (ValueError, FileNotFoundError) as e:
             log.append(f"patch in-place non possibile ({e})")
@@ -915,8 +974,11 @@ def build_iso():
     ok = "successfully" in r.stdout
     log.append(r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr[-200:])
     if ok:
-        log.append("⚠ ISO ricostruita da zero (layout cambiato): riavvia il gioco "
-                   "nell'emulatore e rifai il savestate alla selezione livello")
+        log.append("⚠⚠ SAVESTATE DA RIFARE (evento raro, una tantum): la ISO è stata "
+                   "ricostruita da zero e il layout è cambiato — BOOT DA ZERO in "
+                   "DuckStation (niente savestate!), arriva alla selezione livello "
+                   "e salva lì il nuovo savestate. Le build successive torneranno "
+                   "in-place e quel savestate resterà valido.")
     return {"ok": ok, "log": log}
 
 

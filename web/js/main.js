@@ -55,6 +55,7 @@ async function boot() {
       V3.refreshTerrainMesh();
     }
     if (what === 'layers') V3.composeGround();
+    if (what === 'pth') scheduleCompose();
     if (what === 'hm' || what === 'hm-restored') V3.refreshTerrainMesh();
     if (what === 'tiles') scheduleCompose();
     if (what === 'tiles-restored') { TL.repaintAll(); scheduleCompose(); }
@@ -92,6 +93,7 @@ async function boot() {
     } else if (e.key === 'v' || e.key === 'V') setTool('select');
     else if (e.key === 'h' || e.key === 'H') setTool('height');
     else if (e.key === 't' || e.key === 'T') setTool('tiles');
+    else if (e.key === 'a' || e.key === 'A') setTool('ai');
     else if ((e.key === '[' || e.key === ']') && store.tool === 'height' && !strokeActive()) {
       brush.radius = Math.max(1, Math.min(8, brush.radius + (e.key === ']' ? 0.5 : -0.5)));
       document.getElementById('br-radius').value = brush.radius;

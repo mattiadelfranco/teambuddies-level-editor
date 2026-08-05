@@ -248,11 +248,14 @@ export function composeGround() {
     }
     x.globalAlpha = 1;
   }
-  if (v.pth && store.lvl.pth) {
-    const g = b64u8(store.lvl.pth), cell = 2048 / 128;
-    x.fillStyle = 'rgba(80,160,255,.55)';
-    for (let r = 0; r < 128; r++) for (let cc = 0; cc < 128; cc++)
-      if (g[r * 128 + cc]) x.fillRect(cc * cell, r * cell, cell, cell);
+  if (v.pth && (store.ed.pth || store.lvl.pth)) {
+    const g = store.ed.pth || b64u8(store.lvl.pth), cell = 2048 / 128;
+    for (let r = 0; r < 128; r++) for (let cc = 0; cc < 128; cc++) {
+      const q = g[r * 128 + cc];
+      if (!q) continue;
+      x.fillStyle = q & 16 ? 'rgba(255,70,70,.55)' : 'rgba(255,210,60,.5)';
+      x.fillRect(cc * cell, r * cell, cell, cell);
+    }
   }
   E3.ground = tex(c);
 }

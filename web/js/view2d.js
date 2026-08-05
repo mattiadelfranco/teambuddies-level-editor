@@ -7,6 +7,7 @@ import { api } from './api.js';
 import { brush, beginStroke, moveStroke, endStroke, strokeActive } from './terrain.js';
 import * as TL from './tiles.js';
 import * as CAT from './catalog.js';
+import * as AI from './aiwalk.js';
 
 const W = 512;
 const SEC_COLORS = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#e84393',
@@ -18,6 +19,7 @@ let drag = null;
 let cursor = null;      // last mouse pos in world units (brush cursor)
 let tileRect = null;    // fill-rect drag [[tx,tz],[tx,tz]]
 let tilePaint = false;  // painting drag active
+let aiPaint = false;    // AI-walk painting drag active
 
 function hash(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
 export function modelColor(n) {
@@ -67,6 +69,14 @@ export function draw() {
   if (v.layers.pth) drawPth();
   drawSections(m);
   drawMarkers(m);
+  // AI-walk tool: half-tile brush cursor
+  if (store.tool === 'ai' && cursor) {
+    const s = AI.A.size, h = (s - 1) / 2;
+    const x = Math.floor(cursor[0] / 4 - h) * 4, z = Math.floor(cursor[1] / 4 - h) * 4;
+    ctx.strokeStyle = AI.A.mode === 'block' ? '#ff4646' : '#2ed573';
+    ctx.lineWidth = 1.5 / Math.abs(m.a);
+    ctx.strokeRect(x, z, s * 4, s * 4);
+  }
   // brush cursor (heights tool)
   if (store.tool === 'height' && cursor) {
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
@@ -137,11 +147,16 @@ function drawHeightmap() {
 }
 
 function drawPth() {
-  if (!store.lvl.pth) return;
-  const g = b64u8(store.lvl.pth), cell = W / 128;
-  ctx.fillStyle = 'rgba(80,160,255,.55)';
-  for (let r = 0; r < 128; r++) for (let c = 0; c < 128; c++)
-    if (g[r * 128 + c]) ctx.fillRect(c * cell, r * cell, cell, cell);
+  const g = (store.ed && store.ed.pth) || (store.lvl.pth && b64u8(store.lvl.pth));
+  if (!g) return;
+  const cell = W / 128;
+  for (let r = 0; r < 128; r++) for (let c = 0; c < 128; c++) {
+    const v = g[r * 128 + c];
+    if (!v) continue;
+    // red = blocked for the AI (bit 16); yellow = vanilla AI hints (2/3/5…)
+    ctx.fillStyle = v & AI.BLOCKED ? 'rgba(255,70,70,.55)' : 'rgba(255,210,60,.5)';
+    ctx.fillRect(c * cell, r * cell, cell, cell);
+  }
 }
 
 function drawSections(m) {
@@ -262,6 +277,14 @@ export function init2d(canvas, statusPos, tipEl) {
       e.preventDefault();
       return;
     }
+    if (store.tool === 'ai') {
+      aiPaint = true;
+      store.beginGesture();
+      AI.paintAt(wx, wz, e.altKey);
+      draw();
+      e.preventDefault();
+      return;
+    }
     if (store.tool === 'tiles') {
       const tx = wx / 8, tz = wz / 8;
       if (TL.T.mode === 'pick' || e.altKey && TL.T.mode !== 'clone') {
@@ -314,6 +337,12 @@ export function init2d(canvas, statusPos, tipEl) {
       draw();
       return;
     }
+    if (store.tool === 'ai') {
+      cursor = e.target === cv ? [wx, wz] : null;
+      if (aiPaint) AI.paintAt(wx, wz, e.altKey);
+      draw();
+      return;
+    }
     if (store.tool === 'tiles') {
       cursor = e.target === cv ? [wx, wz] : null;
       if (tileRect) { tileRect[1] = [wx / 8, wz / 8]; draw(); return; }
@@ -359,6 +388,7 @@ export function init2d(canvas, statusPos, tipEl) {
       return;
     }
     if (tilePaint) { tilePaint = false; TL.T.cloneDelta = null; return; }
+    if (aiPaint) { aiPaint = false; return; }
     if (drag && drag.empty && !drag.moved) {
       // click on empty ground: copy exact coordinates
       const l = store.lvl, wx = drag.wx, wz = drag.wz;
