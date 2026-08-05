@@ -275,13 +275,20 @@ function onLevel() {
   const SEC_COLORS = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#e84393', '#00d2d3',
     '#f9ca24', '#a29bfe', '#fd79a8', '#55efc4', '#fab1a0', '#74b9ff', '#ffeaa7',
     '#81ecec', '#dfe6e9', '#b2bec3', '#636e72'];
+  // all 17 sections identified — see docs/FORMATS.md
+  const SEC_NAMES = ['spawns + pads', 'random spawn candidates', 'hidden weapons',
+    'crate zones', 'objective points', '(unused)', 'placed units', 'AI patrol routes',
+    '(unused)', '(unused)', 'blast-protected rects', '(unused)', 'delivery points',
+    'scripted drops', 'nearest-point list A', 'nearest-point list B', 'unit routes'];
   for (const s of l.pld) {
     const lab = document.createElement('label');
     const info = s.pts.length ? `n=${s.n} rec=${s.rec}B` : `${s.sz}B`;
+    lab.title = `s${s.i} (accessor arg 0x${(s.i * 4).toString(16)}) — ${SEC_NAMES[s.i]}`;
     lab.innerHTML = `<input type="checkbox" data-s="${s.i}" ${store.view.sections.has(s.i) ? 'checked' : ''}
       ${s.pts.length ? '' : 'disabled'}>
-      <span class="sw" style="background:${SEC_COLORS[s.i]}"></span> s${s.i}
-      <span class="hint">(${info})</span>`;
+      <span class="sw" style="background:${SEC_COLORS[s.i]}"></span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">s${s.i} ${SEC_NAMES[s.i]}</span>
+      <span class="hint">${info}</span>`;
     lab.querySelector('input').onchange = e => store.apply(st => {
       const i = +e.target.dataset.s;
       e.target.checked ? st.view.sections.add(i) : st.view.sections.delete(i);
@@ -432,8 +439,8 @@ function refreshInspector() {
     });
   } else if (sel.k === 's0') {
     F.innerHTML = '';
-    note.textContent = `Pad ${sel.i + 1}: spawn + stacking logic. The engine draws the pad here at runtime; `
-      + 'painted tiles + arrow animations follow on save. Teams claim the nearest base, in pad order.';
+    note.textContent = `Pad ${sel.i + 1}: spawn + stacking logic. Painted tiles follow the marker live; `
+      + 'arrow animations + terrain flattening apply on save. Teams claim the nearest base, in pad order.';
   } else {
     F.innerHTML = '';
   }

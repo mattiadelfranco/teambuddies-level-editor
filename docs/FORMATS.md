@@ -78,8 +78,8 @@ Other useful entries: **818+** mission briefing text, **953** config bundle
 
 ```
 offset  size  field
-0       4     unknown (u32, = 2040 in every level)
-4       4     unknown (s32, varies)
+0       4     unknown (u32; six distinct values across levels, 744…2040)
+4       4     unknown (s32; different in all 45 levels)
 8       68    17 section offsets (u32 each), relative to byte 8
 8+off   ...   section data
 ```
@@ -89,27 +89,48 @@ a section means rewriting it and adding the delta to every later offset in the
 table. Accessor in the engine: `section_base = pld_base + *(pld_base + 4*section)`
 (the PLD pointer is advanced by 8 during setup, hence `arg = 4*section`).
 
-Known sections:
+All 17 sections, identified (readers found by scanning every `jal` to the
+accessor and recovering the `a0` immediate; record shapes cross-checked
+against all 45 levels):
 
-- **s0 — spawns + capture pads.** `count (u32)` then `count` records of
-  `{ x, z, w, h }` as 8.8 center-relative (each u16). One record per team (2–4).
-  Moving a record moves that team's spawn **and** the functional pad. The visible
-  pad is drawn by the engine at this position at runtime (`FUN_800e53f0`); the
-  painted tiles in the PND underneath are just static decoration. Formula
-  verified pixel-perfect: `tile = 32 + s16(value)/512`.
-- **s1 — random candidate positions** (8.8 center-relative). At level start the
-  engine picks `rand % count` per team (`FUN_800717a0`).
-- **s2 — hidden "next world" weapons** to pick up (preview/progression).
-- **s6 — placed units.** `u16 count` + `u16 extra`, then 8-byte records:
-  `{ type (u16), team|variant (u8+u8), x (u16), z (u16) }`, coords 8.8
-  center-relative. `type` indexes the **62-slot** unit table (types ≥62 crash;
-  see the unit catalog). Spawned by `FUN_8006f5e4`.
-- **s7 — AI patrol routes.** `u32 route_count`, per route `u32 waypoint_count` +
-  12-byte waypoints `{ x (.5-encoded u16), z, x_int (s16), z_int, angle (u32) }`.
-  Read by the CL2 init.
-- **s3** — pairs of tile-index groups (symmetric patches). **s14/s15** — point
-  lists for "nearest" gameplay queries. **s16** — an 8-waypoint loop around the
-  center. Others partially identified.
+| # | arg | what it is | shape | present in |
+|---|-----|------------|-------|-----------|
+| s0 | 0x00 | **team spawns + capture pads** | `u32 n` + n×8B `{x,z,w,h}` 8.8 | 45/45 (2–11) |
+| s1 | 0x04 | **random spawn candidates** — at level start each team draws `rand % n` (`FUN_800717a0`); 7 readers across ENG/GAME | `u32 n` + n×8B | 44/45 |
+| s2 | 0x08 | **hidden next-world weapons** (progression preview) | `u32 n` + n×8B | 20/45 |
+| s3 | 0x0c | **crate-launch zones** — delivery goes to the zone nearest the requester | `u32 n` + per zone `u32 m` + m×u16 half-tile indices | 41/45 |
+| s4 | 0x10 | **mission objective points** (`FUN_80072ed8`): marks the object found at each point with flag `0x10000` and counts it in `DAT_800be818`, or spawns resource `0x54` if the spot is empty. Only processed when `d8ce == 1` (mission 1, "That's Rubbish" — its 61 points are the litter) | `u32 n` + n×8B | 3/45 |
+| s5 | 0x14 | **unused** — empty in every level, no reader | — | 0/45 |
+| s6 | 0x18 | **placed units** — `u16 n` + `u16 extra`, then 8B `{type, team|route, x, z}` | see below | 34/45 |
+| s7 | 0x1c | **AI patrol network** — loaded with the level (`FUN_80081ddc`) | `u32 n` + per route `u32 m` + m×12B waypoints | 45/45 |
+| s8 | 0x20 | **unused** — empty everywhere, no reader | — | 0/45 |
+| s9 | 0x24 | **unused** — empty everywhere, no reader | — | 0/45 |
+| s10 | 0x28 | **blast-protected rectangles** (`FUN_80082ab4` → `FUN_80082d08`): each record is a tile rect; every vertex inside is flagged via `FUN_800a79f4(…,1)`, and the explosion code (`FUN_800ac1f0`) skips scorch marks on bit 0 and terrain deformation on bit 1. The engine also caches the rect's min/max height | `u32 n` + n×12B `{x0,z0,x1,z1,…}` | 17/45 |
+| s11 | 0x2c | **unused** — empty everywhere, no reader | — | 0/45 |
+| s12 | 0x30 | **delivery/reinforcement drop points** — consumed by `FUN_8008397c`, which pairs them with the 28-byte per-mission config in LEVELS.BIN (timers `param[1..3] × 25`, resources via `FUN_8007409c`) | `u32 n` + n×4B `{x,z}` 8.8 | 10/45 |
+| s13 | 0x34 | **scripted drops** — reader in GAME (`0x800e46d0`), never populated in the shipped levels | `u32 n` | 0/45 |
+| s14 | 0x38 | **"nearest point" query list** (GAME `FUN_800dfca8` and callers) | `u32 n` + n×8B | 42/45 |
+| s15 | 0x3c | **second "nearest point" list**, same shape and users | `u32 n` + n×8B | 41/45 |
+| s16 | 0x40 | **unit routes** — indexed 1-based by `FUN_80082054`; the *high byte* of an s6 record's `team|route` field selects the route (0 = none). Same structure as s7 | `u32 n` + per route `u32 m` + m×12B | 33/45 |
+
+The s6↔s16 link is unambiguous in the data: across the 33 levels that use
+either, the route index never exceeds the number of s16 entries, and usually
+matches it exactly — PIGGYINTHEMIDDLE has three pigs with routes 1/2/3 and
+three routes; TEMPLETANTRUM four lions with routes 1–4 and four routes; the
+capture-vehicle levels give all four teams route 1 (one shared path).
+
+Waypoint record (s7 and s16), 12 bytes:
+
+```
+0   u16  x, half-tile encoded
+2   u16  z
+4   s16  x, center-relative 8.8
+6   s16  z
+8   u32  facing angle (PSX units, 0x1000 = full turn)
+```
+
+Header note: the first u32 is **not** constant across levels (six distinct
+values: 744…2040); the second is a per-level value, different in all 45.
 
 ---
 

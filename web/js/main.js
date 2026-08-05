@@ -7,6 +7,7 @@ import { brush, strokeActive } from './terrain.js';
 import * as TL from './tiles.js';
 import * as CAT from './catalog.js';
 import * as IM from './atlasimport.js';
+import * as PAD from './padoverlay.js';
 
 // repainting the 3D ground texture is ~10ms: throttle during paint drags
 let composeTimer = 0;
@@ -45,13 +46,13 @@ async function boot() {
 
   store.onChange(what => {
     if (what === 'level') {
-      loadGround(() => V3.composeGround());
+      loadGround(() => { PAD.update(true); V3.composeGround(); });
       V3.reload();
       TL.loadAtlas(store.entry).then(() => store.emit('atlas')).catch(() => {});
       if (sel.value !== store.entry) sel.value = store.entry;
     }
     if (what === 'saved') {           // baseline reloaded from disk
-      reloadGround(() => V3.composeGround());
+      reloadGround(() => { PAD.update(true); V3.composeGround(); });
       V3.refreshTerrainMesh();
     }
     if (what === 'layers') V3.composeGround();
@@ -59,6 +60,10 @@ async function boot() {
     if (what === 'hm' || what === 'hm-restored') V3.refreshTerrainMesh();
     if (what === 'tiles') scheduleCompose();
     if (what === 'tiles-restored') { TL.repaintAll(); scheduleCompose(); }
+    // live pad visuals: repaint the ground canvas cells under moved s0 pads
+    // (force after events that redrew the canvas or swapped the baseline)
+    if (PAD.update(['tiles', 'tiles-restored', 'atlas', 'saved', 'level'].includes(what)))
+      scheduleCompose();
     if (store.view.mode === '2d') draw();
   });
 

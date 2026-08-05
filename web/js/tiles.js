@@ -127,18 +127,17 @@ export function setGroundImage(img) {
 }
 export function groundCanvas() { return T.canvas; }
 
-function patchCanvas(i) {
-  if (!T.canvas || !T.atlas) return;
-  const tl = store.ed.tiles;
+// render the 28B record at byte offset `off` of `tl` -> ImageData 64x64
+function renderRec(tl, off) {
   const dv = new DataView(tl.buffer, tl.byteOffset);
-  const u = dv.getUint16(i * 28, true), v = tl[i * 28 + 2];
-  const d = [dv.getInt8(i * 28 + 3), dv.getInt8(i * 28 + 4),
-             dv.getInt8(i * 28 + 5), dv.getInt8(i * 28 + 6)];
+  const u = dv.getUint16(off, true), v = tl[off + 2];
+  const d = [dv.getInt8(off + 3), dv.getInt8(off + 4),
+             dv.getInt8(off + 5), dv.getInt8(off + 6)];
   const cell = ((v >> 6) * cellsX()) + (u >> 6);
-  let im = renderCell(cell, tl[i * 28 + 7], orientIndex(u & 63, v & 63, d));
+  let im = renderCell(cell, tl[off + 7], orientIndex(u & 63, v & 63, d));
   // vertex-color modulation (mean of the 4 corners, 128 = neutral) — same
   // as render_ground.py, so the client patch matches the server PNG
-  const co = i * 28 + 8;
+  const co = off + 8;
   let mr = 0, mg = 0, mb = 0;
   for (let k = 0; k < 4; k++) { mr += tl[co + k * 4]; mg += tl[co + k * 4 + 1]; mb += tl[co + k * 4 + 2]; }
   mr /= 512; mg /= 512; mb /= 512;
@@ -150,9 +149,18 @@ function patchCanvas(i) {
     }
     im = out;
   }
-  T.canvas.getContext('2d').putImageData(im, (i % 64) * 64, (i >> 6) * 64);
+  return im;
+}
+
+// draw an arbitrary record onto canvas cell i (the pad overlay blits records
+// at foreign positions; painting is the tl = ed.tiles, off = i*28 case)
+export function drawRecAt(i, tl, off) {
+  if (!T.canvas || !T.atlas) return;
+  T.canvas.getContext('2d').putImageData(renderRec(tl, off), (i % 64) * 64, (i >> 6) * 64);
   if (T.onPatch) T.onPatch(i);
 }
+
+export function patchCanvas(i) { drawRecAt(i, store.ed.tiles, i * 28); }
 
 // shade brush: scale the 4 vertex colors of a tile (darken, Alt = lighten)
 function shadeTile(i, lighten) {
