@@ -157,6 +157,17 @@ def parse_level(entry):
         zones.append([(min(hx) + max(hx) + 1) / 4, (min(hz) + max(hz) + 1) / 4])
     lvl["s3"] = zones
 
+    # s10 teleport zones: [dest, flags, x0, z0, x1, z1] — rect in HALF-tiles
+    # (tile = v/2). flags bit 8 = entrance, low nibble = effect variant.
+    o10, sz10 = offs[10] + 8, offs[11] - offs[10]
+    tps = []
+    if sz10 > 4:
+        c10, = struct.unpack_from("<I", d, o10)
+        if 0 < c10 <= 64 and 4 + c10 * 12 <= sz10:
+            tps = [list(struct.unpack_from("<2H4h", d, o10 + 4 + k * 12))
+                   for k in range(c10)]
+    lvl["s10"] = tps
+
     # ---- tile array (64x64 x 28B) + animated-tile indices ----
     d = open(pnds[0], "rb").read()
     off_tiles = hm_off + 65 * 65 * 2

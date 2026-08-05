@@ -55,6 +55,7 @@ export const store = {
     const ed = this.ed;
     return {
       s0: ed.s0.map(r => r.slice()), s3: ed.s3.map(r => r.slice()),
+      s10: ed.s10.map(r => r.slice()),
       zcfg: ed.zcfg.map(c => (c ? c.slice() : null)),
       zcfgTouched: ed.zcfgTouched, tcount: ed.tcount, tcountTouched: ed.tcountTouched,
       s6: JSON.parse(JSON.stringify(ed.s6)),
@@ -72,6 +73,7 @@ export const store = {
   _restore(s) {
     const ed = this.ed;
     ed.s0 = s.s0.map(r => r.slice()); ed.s3 = s.s3.map(r => r.slice());
+    ed.s10 = s.s10.map(r => r.slice());
     ed.zcfg = s.zcfg.map(c => (c ? c.slice() : null));
     ed.zcfgTouched = s.zcfgTouched; ed.tcount = s.tcount; ed.tcountTouched = s.tcountTouched;
     ed.s6 = JSON.parse(JSON.stringify(s.s6));
@@ -161,6 +163,7 @@ export const store = {
       this.edits[entry] = {
         s0: l.s0.map(r => r.slice()),
         s3: l.s3.map(p => p.slice()),
+        s10: (l.s10 || []).map(r => r.slice()),  // teleport zones (raw, half-tiles)
         zcfg: l.s3.map((_, i) => (zc[i] ? zc[i].slice() : null)),
         zcfgTouched: false,
         tcount: this.cat.mteams[mis] !== undefined ? this.cat.mteams[mis] : null,
@@ -209,6 +212,7 @@ export const store = {
       instFull: ed.inst,
     };
     if (ed.s3.length) edits.s3 = ed.s3;
+    if (ed.s10.length || (this.lvl.s10 || []).length) edits.s10 = ed.s10;
     if (ed.zcfgTouched) edits.zoneCfg = ed.zcfg;
     if (this.rec.touched) edits.recipes = { set: this.rec.set, pairs: this.rec.pairs };
     if (ed.tcountTouched) edits.teamCount = ed.tcount;

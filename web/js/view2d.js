@@ -192,6 +192,31 @@ function drawMarkers(m) {
       ctx.fillStyle = 'rgba(255,159,26,0.12)'; ctx.strokeStyle = 'rgba(255,159,26,0.9)';
       ctx.lineWidth = 1.5 / scale;
       ctx.fillRect(it.x - 32, it.z - 32, 64, 64); ctx.strokeRect(it.x - 32, it.z - 32, 64, 64);
+    } else if (it.k === 'tp') {
+      // teleport zone: its rect, plus an arrow to the paired destination
+      const w = Math.max(it.w, 4), h = Math.max(it.h, 4);
+      ctx.fillStyle = it.entrance ? 'rgba(197,108,240,0.18)' : 'rgba(127,143,166,0.16)';
+      ctx.strokeStyle = it.col;
+      ctx.lineWidth = 1.5 / scale;
+      ctx.fillRect(it.x - w / 2, it.z - h / 2, w, h);
+      ctx.strokeRect(it.x - w / 2, it.z - h / 2, w, h);
+      if (it.entrance) {
+        const dst = list.find(o => o.k === 'tp' && o.i === it.dest);
+        if (dst && dst !== it) {
+          ctx.strokeStyle = 'rgba(197,108,240,0.75)';
+          ctx.setLineDash([5 / scale, 4 / scale]);
+          ctx.beginPath(); ctx.moveTo(it.x, it.z); ctx.lineTo(dst.x, dst.z); ctx.stroke();
+          ctx.setLineDash([]);
+          // arrow head at the destination
+          const a = Math.atan2(dst.z - it.z, dst.x - it.x), s2 = 7 / scale;
+          ctx.beginPath();
+          ctx.moveTo(dst.x, dst.z);
+          ctx.lineTo(dst.x - Math.cos(a - 0.4) * s2 * 2, dst.z - Math.sin(a - 0.4) * s2 * 2);
+          ctx.lineTo(dst.x - Math.cos(a + 0.4) * s2 * 2, dst.z - Math.sin(a + 0.4) * s2 * 2);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(197,108,240,0.85)'; ctx.fill();
+        }
+      }
     }
   }
   // owner line for selected turret

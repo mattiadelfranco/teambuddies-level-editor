@@ -204,6 +204,12 @@ export function initUI(onViewMode) {
       + ' cloned near the center — drag into place. Active only if the mission expects that many teams'
       + ' (Level tab). Remember a nearby crate zone.');
   };
+  $('cat-addtp').onclick = () => {
+    let i;
+    store.apply(() => { i = It.addTeleportPair(256, 256); });
+    store.say(`new teleport pair: entrance ${i} → exit ${i + 1}, both near the map center — `
+      + 'drag them where you want (the arrow shows the link).');
+  };
   $('cat-addzone').onclick = () => {
     let ok;
     store.apply(() => { ok = It.addZone(); });
@@ -437,6 +443,37 @@ function refreshInspector() {
       }
       s.ed.zcfgTouched = true;
     });
+  } else if (sel.k === 'tp') {
+    const r = st.s10[sel.i], entrance = !!(r[1] & 0x100);
+    const others = st.s10.map((_, k) => k).filter(k => k !== sel.i);
+    F.innerHTML = `<label><input type="checkbox" id="if-tpin" ${entrance ? 'checked' : ''}>
+        entrance (sends the buddy to the destination)</label>
+      <div class="row"><label>Destination</label><select id="if-tpdest">${
+        others.map(k => `<option value="${k}"${r[0] === k ? ' selected' : ''}>zone ${k}</option>`).join('')
+        || '<option value="0">— no other zone —</option>'}</select></div>
+      <div class="row"><label>Size</label>
+        <input id="if-tpw" type="number" min="1" max="32" value="${r[4] - r[2]}" style="width:52px">×
+        <input id="if-tph" type="number" min="1" max="32" value="${r[5] - r[3]}" style="width:52px">
+        <span class="hint">half-tiles</span></div>
+      <div class="hint">variant ${r[1] & 0xff} · rect ${r[2]},${r[3]}–${r[4]},${r[5]} (half-tiles)</div>`;
+    $('if-tpin').onchange = e => store.apply(s2 => {
+      const rr = s2.ed.s10[sel.i];
+      rr[1] = e.target.checked ? (rr[1] | 0x100) : (rr[1] & ~0x100);
+    });
+    $('if-tpdest').onchange = e => store.apply(s2 => { s2.ed.s10[sel.i][0] = +e.target.value; });
+    const setSize = () => store.apply(s2 => {
+      const rr = s2.ed.s10[sel.i];
+      const w = Math.max(1, Math.min(32, +$('if-tpw').value || 1));
+      const h = Math.max(1, Math.min(32, +$('if-tph').value || 1));
+      rr[4] = Math.min(128, rr[2] + w); rr[5] = Math.min(128, rr[3] + h);
+    });
+    $('if-tpw').onchange = setSize; $('if-tph').onchange = setSize;
+    const dst = st.s10[r[0]];
+    note.textContent = entrance
+      ? (dst ? `Entering this rect tosses the buddy to zone ${r[0]} at tile `
+               + `(${((dst[2] + dst[4]) / 4).toFixed(1)}, ${((dst[3] + dst[5]) / 4).toFixed(1)}).`
+             : 'destination zone missing!')
+      : 'Exit pad: something else points here. Explosions never crater teleport zones.';
   } else if (sel.k === 's0') {
     F.innerHTML = '';
     note.textContent = `Pad ${sel.i + 1}: spawn + stacking logic. The painted 2x2 pad art follows the `

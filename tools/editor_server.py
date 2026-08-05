@@ -482,6 +482,35 @@ def apply_edits(entry, edits):
         if delta:
             offs = [v + delta if v > offs[6] else v for v in offs]
             struct.pack_into("<17I", d, 8, *offs)
+
+    # s10: ZONE TELETRASPORTO, lista [[dest, flags, x0, z0, x1, z1], ...] con
+    # il rettangolo in MEZZI-TILE (come nel file). Lunghezza libera: sezione
+    # ricostruita + shift degli offset successivi. Il campo dest deve indicare
+    # una zona esistente (il motore lo usa come indice diretto dell'array).
+    if "s10" in edits:
+        o = offs[10] + 8
+        sz = offs[11] - offs[10]
+        cnt = struct.unpack_from("<I", d, o)[0] if sz > 4 else 0
+        recs = edits["s10"]
+        if len(recs) > 64:
+            raise ValueError(f"s10: troppe zone ({len(recs)}), max 64")
+        for i, r in enumerate(recs):
+            if not 0 <= int(r[0]) < max(len(recs), 1):
+                raise ValueError(f"s10: zona {i} punta a dest={r[0]} inesistente")
+            if not (0 <= r[2] <= 128 and 0 <= r[3] <= 128
+                    and 0 <= r[4] <= 128 and 0 <= r[5] <= 128):
+                raise ValueError(f"s10: zona {i} fuori mappa (mezzi-tile 0-128)")
+        payload = bytearray(struct.pack("<I", len(recs)))
+        for r in recs:
+            payload += struct.pack("<2H4h", int(r[0]) & 0xffff, int(r[1]) & 0xffff,
+                                   *[int(v) for v in r[2:6]])
+        old_size = 4 + cnt * 12 if sz > 4 else sz
+        if bytes(d[o:o + old_size]) != bytes(payload):
+            delta = len(payload) - old_size
+            d[o:o + old_size] = payload
+            if delta:
+                offs = [v + delta if v > offs[10] else v for v in offs]
+                struct.pack_into("<17I", d, 8, *offs)
     open(pld_path, "wb").write(d)
 
     # --- PND ---

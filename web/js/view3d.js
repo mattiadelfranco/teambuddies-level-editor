@@ -453,6 +453,19 @@ function render() {
       drapedQuad(it.tx, it.tz, 2, [tc[0] / 255, tc[1] / 255, tc[2] / 255, isSel ? 0.75 : 0.45]);
     } else if (it.k === 'cz') {
       drapedQuad(it.tx, it.tz, 4, [1, 0.62, 0.1, isSel ? 0.5 : 0.22]);
+    } else if (it.k === 'tp') {
+      const hw = Math.max(it.w / 16, 0.25), hh = Math.max(it.h / 16, 0.25);
+      const col = it.entrance ? [0.77, 0.42, 0.94, isSel ? 0.6 : 0.32]
+                              : [0.5, 0.56, 0.65, isSel ? 0.55 : 0.28];
+      drapedQuadRect(it.tx - hw, it.tz - hh, it.tx + hw, it.tz + hh, col);
+      if (it.entrance) {
+        const dst = list.find(o => o.k === 'tp' && o.i === it.dest);
+        if (dst && dst !== it) {
+          gl.depthMask(false);
+          drapedLine(it.tx, it.tz, dst.tx, dst.tz, [0.77, 0.42, 0.94, 0.8]);
+          gl.depthMask(true);
+        }
+      }
     } else if (it.k === 's6') {
       drawMesh(E3.gizmo.cone, it.tx, heightAt(it.tx, it.tz), it.tz, 0,
         [0.98, 0.79, 0.14, isSel ? 1 : 0.85], null, true);
@@ -518,6 +531,29 @@ function render() {
     gl.depthMask(true);
   }
   drawMinimap();
+}
+
+function drapedLine(x0, z0, x1, z1, col) {
+  const gl = E3.gl, L = E3.loc, N = 24, v = [], w = 0.12;
+  const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz) || 1;
+  const nx = -dz / len * w, nz = dx / len * w;
+  for (let i = 0; i < N; i++) {
+    const a = i / N, b = (i + 1) / N;
+    const ax = x0 + dx * a, az = z0 + dz * a, bx = x0 + dx * b, bz = z0 + dz * b;
+    const q = [[ax - nx, az - nz], [ax + nx, az + nz], [bx + nx, bz + nz], [bx - nx, bz - nz]];
+    [q[0], q[1], q[2], q[0], q[2], q[3]].forEach(p =>
+      v.push(p[0], heightAt(p[0], p[1]) + 0.12, p[1], 0, 1, 0, 0, 0));
+  }
+  const b2 = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b2);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STREAM_DRAW);
+  gl.vertexAttribPointer(L.aP, 3, gl.FLOAT, false, 32, 0);
+  gl.vertexAttribPointer(L.aN, 3, gl.FLOAT, false, 32, 12);
+  gl.vertexAttribPointer(L.aU, 2, gl.FLOAT, false, 32, 24);
+  gl.uniform3f(L.uT, 0, 0, 0); gl.uniform1f(L.uRot, 0);
+  gl.uniform4fv(L.uCol, col); gl.uniform1f(L.uLit, 0); gl.uniform1i(L.uTexOn, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, v.length / 8);
+  gl.deleteBuffer(b2);
 }
 
 function drapedQuadRect(x0, z0, x1, z1, col) {

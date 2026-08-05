@@ -20,6 +20,16 @@ export function items() {
     k: 'cz', i, x: p[0] * 8, z: p[1] * 8,
     lbl: 'crate zone ' + (i + 1), col: '#ff9f1a',
   }));
+  // teleport zones (s10): rect stored in HALF-tiles -> canvas world = v*4
+  st.s10.forEach((r, i) => {
+    const entrance = !!(r[1] & 0x100);
+    out.push({
+      k: 'tp', i, x: (r[2] + r[4]) * 2, z: (r[3] + r[5]) * 2,
+      w: (r[4] - r[2]) * 4, h: (r[5] - r[3]) * 4, dest: r[0], entrance,
+      lbl: `teleport ${i} ${entrance ? '→ ' + r[0] : '(exit)'}`,
+      col: entrance ? '#c56cf0' : '#7f8fa6',
+    });
+  });
   st.s6.records.forEach((r, i) => out.push({
     k: 's6', i, x: t2w(r[3]), z: t2w(r[4]),
     lbl: (cat.s6Names[r[0]] || 'type ' + r[0]) + ' (team ' + (r[1] + 1) + ')',
@@ -54,6 +64,13 @@ export function moveItem(it, wx, wz) {
   } else if (it.k === 'in') {
     st.inst[it.i][1] = Math.round(wx);
     st.inst[it.i][3] = Math.round(512 - wz);
+  } else if (it.k === 'tp') {
+    const r = st.s10[it.i];
+    const w = r[4] - r[2], h = r[5] - r[3];
+    const cx = Math.round(wx / 4), cz = Math.round(wz / 4);   // half-tiles
+    r[2] = Math.max(0, Math.min(128 - w, cx - (w >> 1)));
+    r[3] = Math.max(0, Math.min(128 - h, cz - (h >> 1)));
+    r[4] = r[2] + w; r[5] = r[3] + h;
   }
 }
 
@@ -185,6 +202,17 @@ export function addDefenses(type) {
   return n;
 }
 
+// new teleport PAIR: entrance + paired exit, both 1x1 half-tile, linked
+export function addTeleportPair(wx, wz) {
+  const st = store.ed, n = st.s10.length;
+  const hx = Math.max(0, Math.min(126, Math.round(wx / 4)));
+  const hz = Math.max(0, Math.min(126, Math.round(wz / 4)));
+  st.s10.push([n + 1, 0x103, hx, hz, hx + 1, hz + 1]);              // entrance
+  st.s10.push([n, 0x003, Math.min(126, hx + 8), hz, Math.min(127, hx + 9), hz + 1]); // exit
+  store.sel = { k: 'tp', i: n };
+  return n;
+}
+
 export function duplicateSel() {
   const st = store.ed, sel = store.sel;
   if (!sel) return;
@@ -221,6 +249,16 @@ export function deleteSel() {
   } else if (sel.k === 's0') {
     if (st.s0.length <= 1) return 'A level needs at least one pad/spawn.';
     st.s0.splice(sel.i, 1);
+  } else if (sel.k === 'tp') {
+    // remove the zone AND anything pointing at it, then renumber dest
+    const drop = new Set([sel.i]);
+    st.s10.forEach((r, k) => { if (r[0] === sel.i) drop.add(k); });
+    const keep = st.s10.filter((_, k) => !drop.has(k));
+    const remap = new Map();
+    let n = 0;
+    st.s10.forEach((_, k) => { if (!drop.has(k)) remap.set(k, n++); });
+    for (const r of keep) r[0] = remap.has(r[0]) ? remap.get(r[0]) : 0;
+    st.s10 = keep;
   }
   store.sel = null;
   return null;
