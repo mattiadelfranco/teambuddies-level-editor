@@ -45,7 +45,8 @@
     ><button data-tm="fill" title="Drag a rectangle to fill (2D)">▧ Fill</button
     ><button data-tm="clone" title="Alt-click sets the source, then paint to copy">⧉ Clone</button
     ><button data-tm="pick" title="Eyedropper: read a tile into the stamp">⌖ Pick</button
-    ><button data-tm="copy" title="Drag a rectangle to copy tiles + heights (2D)">⛶ Copy</button
+    ><button data-tm="shade" title="Darken the tile vertex colors (Alt = lighten) — baked shading, engine-native">◐ Shade</button
+    ><button data-tm="copy" title="Drag a rectangle to copy tiles + heights">⛶ Copy</button
     ><button data-tm="paste" title="Click to paste the copied region (works across levels, 2D and 3D)">📋 Paste</button>
   </div>
   <label title="Shift pasted heights so the region's lowest point sits on the target terrain (snap 4). Unchecked = absolute heights.">
@@ -73,6 +74,7 @@
       <span id="placebar-txt"></span>
       <button id="placebar-stop">✕ stop placing</button>
     </div>
+    <canvas id="minimap" width="160" height="160" title="Minimap — click to move the camera"></canvas>
   </main>
 
   <aside id="panel">

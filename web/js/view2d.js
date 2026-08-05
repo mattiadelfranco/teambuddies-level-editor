@@ -286,7 +286,8 @@ export function init2d(canvas, statusPos, tipEl) {
       } else {
         tilePaint = true;
         store.beginGesture();
-        TL.paintAt(tx, tz);
+        TL.beginPaintStroke();
+        TL.paintAt(tx, tz, e.altKey);
       }
       e.preventDefault();
       return;
@@ -316,7 +317,7 @@ export function init2d(canvas, statusPos, tipEl) {
     if (store.tool === 'tiles') {
       cursor = e.target === cv ? [wx, wz] : null;
       if (tileRect) { tileRect[1] = [wx / 8, wz / 8]; draw(); return; }
-      if (tilePaint) { TL.paintAt(wx / 8, wz / 8); return; }
+      if (tilePaint) { TL.paintAt(wx / 8, wz / 8, e.altKey); return; }
       draw();
       return;
     }

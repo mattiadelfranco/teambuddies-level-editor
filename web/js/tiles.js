@@ -127,9 +127,34 @@ function patchCanvas(i) {
   const d = [dv.getInt8(i * 28 + 3), dv.getInt8(i * 28 + 4),
              dv.getInt8(i * 28 + 5), dv.getInt8(i * 28 + 6)];
   const cell = ((v >> 6) * cellsX()) + (u >> 6);
-  const im = renderCell(cell, tl[i * 28 + 7], orientIndex(u & 63, v & 63, d));
+  let im = renderCell(cell, tl[i * 28 + 7], orientIndex(u & 63, v & 63, d));
+  // vertex-color modulation (mean of the 4 corners, 128 = neutral) — same
+  // as render_ground.py, so the client patch matches the server PNG
+  const co = i * 28 + 8;
+  let mr = 0, mg = 0, mb = 0;
+  for (let k = 0; k < 4; k++) { mr += tl[co + k * 4]; mg += tl[co + k * 4 + 1]; mb += tl[co + k * 4 + 2]; }
+  mr /= 512; mg /= 512; mb /= 512;
+  if (mr !== 1 || mg !== 1 || mb !== 1) {
+    const out = new ImageData(new Uint8ClampedArray(im.data), 64, 64);
+    const p = out.data;
+    for (let k = 0; k < p.length; k += 4) {
+      p[k] = p[k] * mr; p[k + 1] = p[k + 1] * mg; p[k + 2] = p[k + 2] * mb;
+    }
+    im = out;
+  }
   T.canvas.getContext('2d').putImageData(im, (i % 64) * 64, (i >> 6) * 64);
   if (T.onPatch) T.onPatch(i);
+}
+
+// shade brush: scale the 4 vertex colors of a tile (darken, Alt = lighten)
+function shadeTile(i, lighten) {
+  const tl = store.ed.tiles, co = i * 28 + 8;
+  const f = lighten ? 1.12 : 0.89;
+  for (let k = 0; k < 4; k++) for (let c = 0; c < 3; c++) {
+    const o = co + k * 4 + c;
+    tl[o] = Math.max(16, Math.min(255, Math.round(tl[o] * f)));
+  }
+  patchCanvas(i);
 }
 
 // ---- painting ----
@@ -174,14 +199,21 @@ function copyTile(src, dst) {
   patchCanvas(dst);
 }
 
-export function paintAt(tx, tz) {
+export function beginPaintStroke() { T._stroked = new Set(); }
+
+export function paintAt(tx, tz, alt) {
   const st = store.ed;
   let painted = false, animHit = false;
   const half = (T.size - 1) / 2;
   for (let dz = 0; dz < T.size; dz++) for (let dx = 0; dx < T.size; dx++) {
     const i = idxAt(tx - half + dx, tz - half + dz);
     if (i < 0) continue;
-    if (T.mode === 'clone' && T.cloneDelta) {
+    if (T.mode === 'shade') {
+      // once per tile per stroke, or a drag would darken to black instantly
+      if (T._stroked && T._stroked.has(i)) continue;
+      if (T._stroked) T._stroked.add(i);
+      shadeTile(i, alt);
+    } else if (T.mode === 'clone' && T.cloneDelta) {
       const sx = (i % 64) + T.cloneDelta[0], sz = (i >> 6) + T.cloneDelta[1];
       const si = idxAt(sx + 0.5, sz + 0.5);
       if (si < 0 || si === i) continue;
@@ -189,7 +221,7 @@ export function paintAt(tx, tz) {
     } else {
       writeStamp(i);
     }
-    if (store.lvl.animTiles.includes(i)) animHit = true;
+    if (T.mode !== 'shade' && store.lvl.animTiles.includes(i)) animHit = true;
     painted = true;
   }
   if (painted) store.apply(s => { s.ed.tilesTouched = true; }, 'tiles');

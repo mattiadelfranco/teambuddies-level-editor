@@ -38,6 +38,13 @@ export function gameCam() { E3.cam.yaw = Math.PI; E3.cam.pitch = 0.85; saveCam()
 export function init3d(canvas, statusPos) {
   E3.cv = canvas; E3.statusPos = statusPos;
   window.E3D = E3;              // debug handle (console)
+  const mm = document.getElementById('minimap');
+  if (mm) mm.onclick = e => {
+    const r = mm.getBoundingClientRect();
+    E3.cam.tx = Math.max(0, Math.min(64, (e.clientX - r.left) / r.width * 64));
+    E3.cam.tz = Math.max(0, Math.min(64, (e.clientY - r.top) / r.height * 64));
+    mmLast = 0;
+  };
   const gl = canvas.getContext('webgl', { antialias: true });
   E3.gl = gl;
   const vs = `attribute vec3 aP;attribute vec3 aN;attribute vec2 aU;
@@ -496,6 +503,65 @@ function render() {
     drapedRing(E3.brushPos[0], E3.brushPos[1], brush.radius, [1, 1, 1, 0.7]);
     gl.depthMask(true);
   }
+  // fill/copy rectangle preview (tiles tool)
+  if (E3.rectA && E3.rectB) {
+    const x0 = Math.floor(Math.min(E3.rectA[0], E3.rectB[0]));
+    const x1 = Math.floor(Math.max(E3.rectA[0], E3.rectB[0])) + 1;
+    const z0 = Math.floor(Math.min(E3.rectA[1], E3.rectB[1]));
+    const z1 = Math.floor(Math.max(E3.rectA[1], E3.rectB[1])) + 1;
+    gl.depthMask(false);
+    drapedQuadRect(x0, z0, x1, z1,
+      TL.T.mode === 'copy' ? [0, 0.82, 0.83, 0.3] : [1, 1, 1, 0.25]);
+    gl.depthMask(true);
+  }
+  drawMinimap();
+}
+
+function drapedQuadRect(x0, z0, x1, z1, col) {
+  const gl = E3.gl, L = E3.loc, v = [];
+  const nx = Math.max(1, Math.min(16, x1 - x0)), nz = Math.max(1, Math.min(16, z1 - z0));
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const ax = x0 + (x1 - x0) * i / nx, bx = x0 + (x1 - x0) * (i + 1) / nx;
+    const az = z0 + (z1 - z0) * j / nz, bz = z0 + (z1 - z0) * (j + 1) / nz;
+    const q = [[ax, az], [bx, az], [bx, bz], [ax, bz]];
+    [q[0], q[1], q[2], q[0], q[2], q[3]].forEach(p =>
+      v.push(p[0], heightAt(p[0], p[1]) + 0.08, p[1], 0, 1, 0, 0, 0));
+  }
+  const b = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STREAM_DRAW);
+  gl.vertexAttribPointer(L.aP, 3, gl.FLOAT, false, 32, 0);
+  gl.vertexAttribPointer(L.aN, 3, gl.FLOAT, false, 32, 12);
+  gl.vertexAttribPointer(L.aU, 2, gl.FLOAT, false, 32, 24);
+  gl.uniform3f(L.uT, 0, 0, 0); gl.uniform1f(L.uRot, 0);
+  gl.uniform4fv(L.uCol, col); gl.uniform1f(L.uLit, 0); gl.uniform1i(L.uTexOn, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, v.length / 8);
+  gl.deleteBuffer(b);
+}
+
+// ---- minimap (3D mode): ground overview + camera indicator ----
+let mmLast = 0;
+function drawMinimap() {
+  const mm = document.getElementById('minimap');
+  if (!mm || mm.style.display === 'none') return;
+  const now = performance.now();
+  if (now - mmLast < 150) return;
+  mmLast = now;
+  const x = mm.getContext('2d'), s = 160 / 64;
+  const gc = TL.groundCanvas();
+  x.clearRect(0, 0, 160, 160);
+  if (gc) x.drawImage(gc, 0, 0, 160, 160);
+  else { x.fillStyle = '#1c2b1c'; x.fillRect(0, 0, 160, 160); }
+  const c = E3.cam;
+  const ex = c.tx + c.dist * Math.cos(c.pitch) * Math.sin(c.yaw);
+  const ez = c.tz + c.dist * Math.cos(c.pitch) * Math.cos(c.yaw);
+  x.strokeStyle = '#fff'; x.lineWidth = 1.5;
+  x.beginPath(); x.moveTo(ex * s, ez * s); x.lineTo(c.tx * s, c.tz * s); x.stroke();
+  x.fillStyle = '#3b82f6';
+  x.beginPath(); x.arc(ex * s, ez * s, 4, 0, 7); x.fill();
+  x.strokeStyle = '#000'; x.stroke();
+  x.fillStyle = '#fff';
+  x.beginPath(); x.arc(c.tx * s, c.tz * s, 3, 0, 7); x.fill();
 }
 
 function drapedRing(cx, cz, r, col) {
@@ -566,7 +632,7 @@ function input() {
     if (store.tool === 'tiles') {
       const g = groundHit(mx, my, c.clientWidth, c.clientHeight);
       if (g && isFinite(g[0])) {
-        if (TL.T.mode === 'pick' || e.altKey) {
+        if (TL.T.mode === 'pick' || (e.altKey && TL.T.mode === 'paint')) {
           TL.readTile(g[0], g[1]);
           store.emit('stamp');
         } else if (TL.T.mode === 'clone') {
@@ -576,15 +642,21 @@ function input() {
                                Math.floor(TL.T.cloneSrc[1]) - Math.floor(g[1])];
             mode = 'tilepaint';
             store.beginGesture();
+            TL.beginPaintStroke();
             TL.paintAt(g[0], g[1]);
           }
-        } else if (TL.T.mode === 'paint') {
+        } else if (TL.T.mode === 'paint' || TL.T.mode === 'shade') {
           mode = 'tilepaint';
           store.beginGesture();
-          TL.paintAt(g[0], g[1]);
+          TL.beginPaintStroke();
+          TL.paintAt(g[0], g[1], e.altKey);
         } else if (TL.T.mode === 'paste') {
           TL.pasteRegion(g[0], g[1]);
-        } else store.say('fill/copy rectangles work in the 2D view — paint and paste work here.');
+        } else {                       // fill / copy: drag a rectangle on the terrain
+          mode = 'tilerect';
+          E3.rectY = heightAt(g[0], g[1]);
+          E3.rectA = g; E3.rectB = g;
+        }
       }
       return;
     }
@@ -615,7 +687,12 @@ function input() {
     }
     if (mode === 'tilepaint') {
       const g = groundHit(mx, my, c.clientWidth, c.clientHeight);
-      if (g && isFinite(g[0])) TL.paintAt(g[0], g[1]);
+      if (g && isFinite(g[0])) TL.paintAt(g[0], g[1], e.altKey);
+      return;
+    }
+    if (mode === 'tilerect') {
+      const g = groundHit(mx, my, c.clientWidth, c.clientHeight, E3.rectY);
+      if (g && isFinite(g[0])) E3.rectB = g;
       return;
     }
     if (!mode) return;
@@ -644,6 +721,17 @@ function input() {
   window.addEventListener('mouseup', e => {
     if (mode === 'sculpt') { endStroke(); mode = null; return; }
     if (mode === 'tilepaint') { store.endGesture(); TL.T.cloneDelta = null; mode = null; return; }
+    if (mode === 'tilerect') {
+      if (E3.rectA && E3.rectB) {
+        if (TL.T.mode === 'copy')
+          TL.copyRegion(E3.rectA[0], E3.rectA[1], E3.rectB[0], E3.rectB[1]);
+        else
+          TL.fillRect(E3.rectA[0], E3.rectA[1], E3.rectB[0], E3.rectB[1]);
+      }
+      E3.rectA = E3.rectB = null;
+      mode = null;
+      return;
+    }
     if (mode === 'move') store.endGesture();
     if (mode === 'orbit' && moved < 5 && E3.on && e.target === c) {
       const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;

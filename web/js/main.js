@@ -20,6 +20,7 @@ function setMode(mode) {
   store.view.mode = mode;
   $('cv2d').style.display = mode === '2d' ? '' : 'none';
   $('cv3d').style.display = mode === '3d' ? 'block' : 'none';
+  $('minimap').style.display = mode === '3d' ? 'block' : 'none';
   V3.show3d(mode === '3d');
   setViewButtons(mode);
   if (mode === '2d') draw();

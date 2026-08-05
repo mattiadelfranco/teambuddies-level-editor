@@ -72,6 +72,11 @@ body {
   border: 1px solid #3b82f6; border-radius: 8px; padding: 5px 10px;
   font-size: 12px; z-index: 6;
 }
+#minimap {
+  position: absolute; right: 10px; top: 10px; width: 160px; height: 160px;
+  border: 1px solid #3a3f4a; border-radius: 6px; background: #000;
+  cursor: crosshair; display: none; z-index: 5; opacity: 0.92;
+}
 
 /* ---- right panel ---- */
 #panel {
