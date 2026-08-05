@@ -278,7 +278,7 @@ function onLevel() {
   // all 17 sections identified — see docs/FORMATS.md
   const SEC_NAMES = ['spawns + pads', 'random spawn candidates', 'hidden weapons',
     'crate zones', 'objective points', '(unused)', 'placed units', 'AI patrol routes',
-    '(unused)', '(unused)', 'blast-protected rects', '(unused)', 'delivery points',
+    '(unused)', '(unused)', 'teleport zones', '(unused)', 'delivery points',
     'scripted drops', 'nearest-point list A', 'nearest-point list B', 'unit routes'];
   for (const s of l.pld) {
     const lab = document.createElement('label');
@@ -439,8 +439,9 @@ function refreshInspector() {
     });
   } else if (sel.k === 's0') {
     F.innerHTML = '';
-    note.textContent = `Pad ${sel.i + 1}: spawn + stacking logic. Painted tiles follow the marker live; `
-      + 'arrow animations + terrain flattening apply on save. Teams claim the nearest base, in pad order.';
+    note.textContent = `Pad ${sel.i + 1}: spawn + stacking logic. The painted 2x2 pad art follows the `
+      + 'marker live (the ground around it stays put); animations + terrain flattening apply on save. '
+      + 'Teams claim the nearest base, in pad order.';
   } else {
     F.innerHTML = '';
   }

@@ -105,13 +105,21 @@ against all 45 levels):
 | s7 | 0x1c | **AI patrol network** — loaded with the level (`FUN_80081ddc`) | `u32 n` + per route `u32 m` + m×12B waypoints | 45/45 |
 | s8 | 0x20 | **unused** — empty everywhere, no reader | — | 0/45 |
 | s9 | 0x24 | **unused** — empty everywhere, no reader | — | 0/45 |
-| s10 | 0x28 | **blast-protected rectangles** (`FUN_80082ab4` → `FUN_80082d08`): each record is a tile rect; every vertex inside is flagged via `FUN_800a79f4(…,1)`, and the explosion code (`FUN_800ac1f0`) skips scorch marks on bit 0 and terrain deformation on bit 1. The engine also caches the rect's min/max height | `u32 n` + n×12B `{x0,z0,x1,z1,…}` | 17/45 |
+| s10 | 0x28 | **teleport zones** — `{dest, flags, x0, z0, x1, z1}`: `dest` is the index of the paired zone, `flags` bit 8 = entrance (low nibble = effect variant), and the rect is in **half-tiles** (`tile = value/2`). Entering an entrance launches the buddy on a ballistic arc to the paired zone's centre (`FUN_80076dfc` and friends, with sound + effect). Loading also flags every vertex inside via `FUN_800a79f4(…,1)`, which makes the explosion code (`FUN_800ac1f0`) skip scorch marks (bit 0) and terrain deformation (bit 1) — so teleport pads never get cratered | `u32 n` + n×12B | 17/45 |
 | s11 | 0x2c | **unused** — empty everywhere, no reader | — | 0/45 |
 | s12 | 0x30 | **delivery/reinforcement drop points** — consumed by `FUN_8008397c`, which pairs them with the 28-byte per-mission config in LEVELS.BIN (timers `param[1..3] × 25`, resources via `FUN_8007409c`) | `u32 n` + n×4B `{x,z}` 8.8 | 10/45 |
 | s13 | 0x34 | **scripted drops** — reader in GAME (`0x800e46d0`), never populated in the shipped levels | `u32 n` | 0/45 |
 | s14 | 0x38 | **"nearest point" query list** (GAME `FUN_800dfca8` and callers) | `u32 n` + n×8B | 42/45 |
 | s15 | 0x3c | **second "nearest point" list**, same shape and users | `u32 n` + n×8B | 41/45 |
 | s16 | 0x40 | **unit routes** — indexed 1-based by `FUN_80082054`; the *high byte* of an s6 record's `team|route` field selects the route (0 = none). Same structure as s7 | `u32 n` + per route `u32 m` + m×12B | 33/45 |
+
+Teleport pairing is visible straight in the data: most levels are perfect
+involutions (A↔B two-way pads, both `0x0100`), while the bigger ones mix
+`0x01xx` entrances with plain `0x00xx` exits — several entrances can share one
+exit. WHORA's four zones are two pairs: the large entrance over tiles
+x 55–58.5, z 25–29.5 (`0x0103`) sends you to the exit at tile (43, 27)
+(`0x0003`). COUNTRYVILE has 41 zones (its tunnel network), SPACECITY 16 in
+symmetric two-way pairs.
 
 The s6↔s16 link is unambiguous in the data: across the 33 levels that use
 either, the route index never exceeds the number of s16 entries, and usually

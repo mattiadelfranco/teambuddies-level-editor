@@ -40,12 +40,13 @@ def _tiles_layout(d):
 
 
 def _repaint_pads(d, off_hm, off_tiles, moves):
-    """Sposta i 4x4 tile dipinti delle pedane [(old_c, new_c), ...] (centri
-    tile x.5) e spiana il terreno sotto le nuove posizioni. Gli spostamenti
-    sono SIMULTANEI: tutti i blocchi vengono letti dallo stato pre-edit, così
+    """Sposta l'ARTE dipinta delle pedane [(old_c, new_c), ...] (centri tile
+    x.5) e spiana il terreno sotto le nuove posizioni. L'arte è il SOLO centro
+    2x2 (quadrato colorato + frecce, clut della squadra): l'anello del blocco
+    4x4 è erba/terreno locale e NON viene trapiantato — la destinazione tiene
+    il suo terreno e la decorazione attorno al vecchio posto resta. Gli
+    spostamenti sono SIMULTANEI: tutto viene letto dallo stato pre-edit, così
     due pedane che si scambiano di posto non si mangiano i tile a vicenda."""
-    from collections import Counter
-
     def rd(x, z):
         o = off_tiles + (z * 64 + x) * 28
         return bytes(d[o:o + 28])
@@ -54,36 +55,27 @@ def _repaint_pads(d, off_hm, off_tiles, moves):
         o = off_tiles + (z * 64 + x) * 28
         d[o:o + 28] = rec
 
-    moves = [(_pad_block(o), _pad_block(n)) for o, n in moves]
     moves = [m for m in moves
-             if all(0 <= x < 64 and 0 <= z < 64 for x, z in m[0] + m[1])]
+             if all(0 <= x < 64 and 0 <= z < 64
+                    for x, z in _pad_block(m[0]) + _pad_block(m[1]))]
     if not moves:
         return
-    # snapshot pre-edit: tile dipinti + tappo d'erba di ogni pedana (il
-    # perimetro esclude i vecchi blocchi di TUTTE le pedane in movimento)
-    old_all = {t for ob, _ in moves for t in ob}
-    snap = []
-    for ob, nb in moves:
-        recs = [rd(x, z) for x, z in ob]
-        x0, z0 = ob[0]
-        per = [rd(x, z) for x in range(x0 - 1, x0 + 5)
-               for z in range(z0 - 1, z0 + 5)
-               if (x, z) not in old_all and 0 <= x < 64 and 0 <= z < 64]
-        filler = Counter(per).most_common(1)[0][0] if per else recs[0]
-        snap.append((ob, nb, recs, filler))
-    # erba su tutti i vecchi blocchi, POI pedane sulle nuove posizioni
-    for ob, _, _, filler in snap:
-        for x, z in ob:
+    # snapshot pre-edit: arte del centro 2x2 + tappo dall'anello di ogni pedana
+    snap = [(oc, nc, [rd(x, z) for x, z in _pad_center(oc)],
+             _ring_filler(d, off_tiles, oc)) for oc, nc in moves]
+    # tappo su tutti i vecchi centri, POI arte sui nuovi centri
+    for oc, _, _, filler in snap:
+        for x, z in _pad_center(oc):
             wr(x, z, filler)
-    for _, nb, recs, _ in snap:
-        for (x, z), rec in zip(nb, recs):
+    for _, nc, recs, _ in snap:
+        for (x, z), rec in zip(_pad_center(nc), recs):
             wr(x, z, rec)
-    # rimappa le VOCI DI ANIMAZIONE (frecce animate del centro pedana) in un
+    # rimappa le VOCI DI ANIMAZIONE (vivono sui 4 tile del centro) in un
     # passaggio unico su una mappa globale vecchio->nuovo: ogni desc viene
     # toccata al massimo una volta (niente doppi rimbalzi negli scambi)
     remap = {}
-    for ob, nb, _, _ in snap:
-        for t, nt in zip(ob, nb):
+    for oc, nc, _, _ in snap:
+        for t, nt in zip(_pad_center(oc), _pad_center(nc)):
             remap.setdefault(t, nt)
     al = _anim_desc(d, off_tiles)
     if al:
@@ -95,9 +87,9 @@ def _repaint_pads(d, off_hm, off_tiles, moves):
             if t in remap:
                 nx, nz = remap[t]
                 struct.pack_into("<H", d, pp, nz * 64 + nx)
-    # spiana i vertici di ogni nuovo blocco all'altezza mediana
-    for _, nb, _, _ in snap:
-        vx, vz = nb[0]
+    # spiana i vertici sotto il blocco 4x4 di ogni nuova posizione
+    for _, nc, _, _ in snap:
+        vx, vz = _pad_block(nc)[0]
         hs = [struct.unpack_from("<h", d, off_hm + (zz * 65 + xx) * 2)[0]
               for zz in range(vz, vz + 5) for xx in range(vx, vx + 5)]
         med = sorted(hs)[len(hs) // 2]
@@ -110,6 +102,24 @@ def _pad_block(c):
     """Impronta 4x4 della pedana centrata in c (centri tile x.5)."""
     x, z = int(c[0] - 0.5) - 1, int(c[1] - 0.5) - 1
     return [(x + i, z + j) for j in range(4) for i in range(4)]
+
+
+def _pad_center(c):
+    """Centro 2x2 della pedana: l'arte dipinta vera (quadrato colorato con
+    frecce baked, 4 orientazioni della stessa cella + clut squadra)."""
+    x, z = int(c[0] - 0.5), int(c[1] - 0.5)
+    return [(x, z), (x + 1, z), (x, z + 1), (x + 1, z + 1)]
+
+
+def _ring_filler(d, off_tiles, c):
+    """Tile più comune dell'anello del blocco 4x4 (l'erba/terreno locale che
+    circonda l'arte pedana): è il tappo giusto per il buco del centro 2x2."""
+    from collections import Counter
+    ctr = set(_pad_center(c))
+    per = [bytes(d[off_tiles + (z * 64 + x) * 28:off_tiles + (z * 64 + x) * 28 + 28])
+           for x, z in _pad_block(c)
+           if (x, z) not in ctr and 0 <= x < 64 and 0 <= z < 64]
+    return Counter(per).most_common(1)[0][0]
 
 
 def _anim_desc(d, off_tiles):
@@ -128,13 +138,15 @@ def _anim_desc(d, off_tiles):
 
 
 def _clone_pad(d, off_hm, off_tiles, src_c, dst_c):
-    """Pedana NUOVA: copia i 16 tile dipinti da src_c a dst_c (src intatta),
-    spiana il terreno sotto la destinazione e clona le voci animazione del
-    centro 2x2 in coda alla lista desc. Ritorna il bytearray (il PND cresce)."""
+    """Pedana NUOVA: copia l'arte centro 2x2 da src_c a dst_c (src intatta,
+    l'anello di terreno NON viene trapiantato), spiana il terreno sotto la
+    destinazione e clona le voci animazione del centro 2x2 in coda alla
+    lista desc. Ritorna il bytearray (il PND cresce)."""
     src_b, dst_b = _pad_block(src_c), _pad_block(dst_c)
     if any(not (0 <= x < 64 and 0 <= z < 64) for x, z in src_b + dst_b):
         return d
-    for (sx, sz), (dx, dz) in zip(src_b, dst_b):
+    src_ctr, dst_ctr = _pad_center(src_c), _pad_center(dst_c)
+    for (sx, sz), (dx, dz) in zip(src_ctr, dst_ctr):
         so = off_tiles + (sz * 64 + sx) * 28
         do = off_tiles + (dz * 64 + dx) * 28
         d[do:do + 28] = d[so:so + 28]
@@ -150,7 +162,7 @@ def _clone_pad(d, off_hm, off_tiles, src_c, dst_c):
         o2, n2 = al
         anim = off_tiles + 131072
         n_tex = struct.unpack_from("<h", d, anim)[0]
-        smap = {t: k for k, t in enumerate(src_b)}
+        smap = {t: k for k, t in enumerate(src_ctr)}
         clones = []
         for i in range(n2):
             pp = o2 + 2 + i * 16
@@ -158,7 +170,7 @@ def _clone_pad(d, off_hm, off_tiles, src_c, dst_c):
             t = (idx % 64, idx // 64)
             if t in smap:
                 rec = bytearray(d[pp:pp + 16])
-                nx, nz = dst_b[smap[t]]
+                nx, nz = dst_ctr[smap[t]]
                 struct.pack_into("<H", rec, 0, nz * 64 + nx)
                 clones.append(rec)
         if clones:
@@ -187,18 +199,14 @@ def _clone_pad(d, off_hm, off_tiles, src_c, dst_c):
 
 
 def _erase_pad(d, off_tiles, c):
-    """Pedana ELIMINATA: tappo d'erba sui 16 tile dipinti e rimozione delle
-    voci animazione del blocco. Ritorna il bytearray (il PND si accorcia)."""
-    from collections import Counter
+    """Pedana ELIMINATA: tappo di terreno locale sull'arte centro 2x2 (l'anello
+    resta: è già il terreno del posto) e rimozione delle voci animazione del
+    blocco. Ritorna il bytearray (il PND si accorcia)."""
     b = _pad_block(c)
     if any(not (0 <= x < 64 and 0 <= z < 64) for x, z in b):
         return d
-    x0, z0 = b[0]
-    per = [bytes(d[off_tiles + (z * 64 + x) * 28:off_tiles + (z * 64 + x) * 28 + 28])
-           for x in range(x0 - 1, x0 + 5) for z in range(z0 - 1, z0 + 5)
-           if (x, z) not in b and 0 <= x < 64 and 0 <= z < 64]
-    filler = Counter(per).most_common(1)[0][0]
-    for x, z in b:
+    filler = _ring_filler(d, off_tiles, c)
+    for x, z in _pad_center(c):
         o = off_tiles + (z * 64 + x) * 28
         d[o:o + 28] = filler
     al = _anim_desc(d, off_tiles)
