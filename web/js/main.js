@@ -6,6 +6,7 @@ import { deleteSel } from './items.js';
 import { brush, strokeActive } from './terrain.js';
 import * as TL from './tiles.js';
 import * as CAT from './catalog.js';
+import * as IM from './atlasimport.js';
 
 // repainting the 3D ground texture is ~10ms: throttle during paint drags
 let composeTimer = 0;
@@ -84,7 +85,8 @@ async function boot() {
         e.preventDefault();
       }
     } else if (e.key === 'Escape') {
-      if (CAT.pending) CAT.cancel();
+      if (IM.pickActive()) IM.cancelPick();
+      else if (CAT.pending) CAT.cancel();
       else if (store.sel) store.apply(s => { s.sel = null; }, 'select');
       else if (store.tool !== 'select') setTool('select');
     } else if (e.key === 'v' || e.key === 'V') setTool('select');

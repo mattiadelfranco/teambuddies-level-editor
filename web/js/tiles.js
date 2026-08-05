@@ -43,16 +43,21 @@ export const T = {
 
 const cellCache = new Map();
 
-export async function loadAtlas(entry) {
-  if (T.entry === entry && T.atlas) return;
-  const a = await (await fetch('/api/atlas/' + entry)).json();
+// decode an /api/atlas payload: nibble-packed indices -> one byte per pixel
+export function decodeAtlas(a) {
   const raw = b64u8(a.idx);
   const idx = new Uint8Array(a.w * a.h);
   for (let i = 0; i < raw.length; i++) {
     idx[2 * i] = raw[i] & 15;
     idx[2 * i + 1] = raw[i] >> 4;
   }
-  T.atlas = { w: a.w, h: a.h, idx, cluts: a.cluts };
+  return { w: a.w, h: a.h, idx, cluts: a.cluts, imports: a.imports || {} };
+}
+
+export async function loadAtlas(entry) {
+  if (T.entry === entry && T.atlas) return;
+  const a = decodeAtlas(await (await fetch('/api/atlas/' + entry)).json());
+  T.atlas = a;
   T.entry = entry;
   cellCache.clear();
   // per-cell dominant clut (for "auto" clut picking)
@@ -72,6 +77,9 @@ export async function loadAtlas(entry) {
     if (!T.cellClut.has(cell) || n > T.cellClut.get(cell)[1])
       T.cellClut.set(cell, [clut, n]);
   }
+  // imported cells no tile references yet: "auto" = the CLUT they came with
+  for (const [cell, clut] of Object.entries(a.imports))
+    if (!T.cellClut.has(+cell)) T.cellClut.set(+cell, [clut, 0]);
 }
 
 export function cellsX() { return T.atlas ? T.atlas.w >> 6 : 16; }

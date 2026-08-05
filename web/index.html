@@ -102,6 +102,22 @@
         <button id="pl-mir" title="Mirror">⇋</button>
         <span id="pl-info" class="hint"></span>
       </div>
+
+      <h3>Import from another level</h3>
+      <div class="row">
+        <label>Level</label>
+        <select id="im-level"><option value="">— choose a level —</option></select>
+      </div>
+      <canvas id="im-atlas" width="512" height="128" style="display:none"></canvas>
+      <div class="row" id="im-ctl" style="display:none">
+        <label>CLUT</label>
+        <select id="im-clut"><option value="-1">auto (per cell)</option></select>
+        <canvas id="im-prev" width="64" height="64"></canvas>
+        <button id="im-go" disabled>Import…</button>
+      </div>
+      <div class="hint">Every level can only draw its own atlas, so this copies
+        the cell's pixels + CLUT into this level's TIM (mod), then you paint
+        with it. Free cells are rare — overwriting a used cell asks first.</div>
     </section>
 
     <section id="tab-inspector" class="tab on">

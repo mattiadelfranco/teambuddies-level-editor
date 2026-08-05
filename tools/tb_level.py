@@ -15,8 +15,10 @@ Coordinate conventions (decompiled from the engine, see docs/FORMATS.md):
 """
 import base64
 import glob
+import json
 import os
 import re
+import shutil
 import struct
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -180,31 +182,162 @@ def parse_level(entry):
     return lvl
 
 
-def atlas(entry):
-    """Level texture atlas (the level's own .TIM): 4bpp indices + all CLUTs.
-    Cells are 64x64; a tile record picks a cell corner (U,V), a CLUT and one
-    of 8 orientations (corner deltas)."""
+def _tim_path(entry):
+    """The level's atlas .TIM: modded copy if the mod folder has one."""
     folder, _ = level_folder(entry)
-    tims = [t for t in glob.glob(os.path.join(folder, "*.TIM"))]
-    if not tims:   # atlas never modded so far, fall back to vanilla
-        tims = [t for t in glob.glob(os.path.join(BIND, entry, "*.TIM"))]
-    d = open(tims[0], "rb").read()
+    tims = glob.glob(os.path.join(folder, "*.TIM"))
+    if not tims:   # mod folder without a TIM, fall back to vanilla
+        tims = glob.glob(os.path.join(BIND, entry, "*.TIM"))
+    return tims[0]
+
+
+def _tim_parse(d):
+    """Header fields of a 4bpp TIM (single CLUT block + single pixel block,
+    true for all 45 level atlases). CLUT k = row k (cw colors, 2B each)."""
     magic, typ = struct.unpack_from("<II", d, 0)
     if magic != 0x10 or not (typ & 8):
         raise ValueError("not a 4bpp TIM")
     clen, _, _, cw, ch = struct.unpack_from("<IHHHH", d, 8)
+    po = 8 + clen
+    _, _, _, iw, ih = struct.unpack_from("<IHHHH", d, po)
+    return {"cw": cw, "ch": ch, "iw": iw, "ih": ih,
+            "cdata": 20, "pdata": po + 12, "w": iw * 4}
+
+
+def _imports_path(entry):
+    return os.path.join(MODS, entry, "atlas_imports.json")
+
+
+def _load_imports(entry):
+    """Sidecar {cell: clut} written by import_cell, so 'auto' CLUT works for
+    imported cells that no tile references yet."""
+    try:
+        return {int(k): v for k, v in json.load(open(_imports_path(entry))).items()}
+    except (OSError, ValueError):
+        return {}
+
+
+def atlas(entry):
+    """Level texture atlas (the level's own .TIM): 4bpp indices + all CLUTs.
+    Cells are 64x64; a tile record picks a cell corner (U,V), a CLUT and one
+    of 8 orientations (corner deltas)."""
+    d = open(_tim_path(entry), "rb").read()
+    h = _tim_parse(d)
     cluts = []
-    for r in range(ch):
+    for r in range(h["ch"]):
         row = []
-        for c in range(cw):
-            v, = struct.unpack_from("<H", d, 20 + (r * cw + c) * 2)
+        for c in range(h["cw"]):
+            v, = struct.unpack_from("<H", d, h["cdata"] + (r * h["cw"] + c) * 2)
             row.append([(v & 31) * 8, ((v >> 5) & 31) * 8,
                         ((v >> 10) & 31) * 8, 0 if v == 0 else 255])
         cluts.append(row)
-    o = 8 + clen
-    _, _, _, iw, ih = struct.unpack_from("<IHHHH", d, o)
-    raw = d[o + 12: o + 12 + iw * 2 * ih]        # 2 pixels per byte, low nibble first
-    return {"w": iw * 4, "h": ih, "idx": _b64(raw), "cluts": cluts}
+    raw = d[h["pdata"]: h["pdata"] + h["iw"] * 2 * h["ih"]]  # 2 px/byte, low nibble first
+    return {"w": h["w"], "h": h["ih"], "idx": _b64(raw), "cluts": cluts,
+            "imports": _load_imports(entry)}
+
+
+def _pnd_tiles_off(d):
+    """Offset of the 64x64x28B tile array inside a PND."""
+    n_names, n_inst, _, _ = struct.unpack_from("<4H", d, 4)
+    off_extra = 12 + n_names * 32 + n_inst * 20
+    extra_cnt = struct.unpack_from("<H", d, off_extra)[0]
+    return off_extra + 2 + extra_cnt * 20 + 65 * 65 * 2
+
+
+def tileinfo(entry):
+    """Palette metadata for any level (source browser + destination picker):
+    per-cell dominant CLUT, cells referenced by tile records (with counts),
+    cells used as animated-texture frames, and the CLUT count of the TIM."""
+    folder, _ = level_folder(entry)
+    pnds = glob.glob(os.path.join(folder, "*.PND"))
+    d = open(pnds[0], "rb").read()
+    h = _tim_parse(open(_tim_path(entry), "rb").read())
+    cols = h["w"] // 64
+    off = _pnd_tiles_off(d)
+    cell_tiles, count = {}, {}
+    for i in range(4096):
+        u, = struct.unpack_from("<H", d, off + i * 28)
+        cell = (d[off + i * 28 + 2] // 64) * cols + u // 64
+        cell_tiles[cell] = cell_tiles.get(cell, 0) + 1
+        key = (cell, d[off + i * 28 + 7])
+        count[key] = count.get(key, 0) + 1
+    cell_clut = {}
+    for (cell, clut), n in count.items():
+        if cell not in cell_clut or n > cell_clut[cell][1]:
+            cell_clut[cell] = (clut, n)
+    cell_clut = {c: v[0] for c, v in cell_clut.items()}
+    for cell, clut in _load_imports(entry).items():
+        cell_clut.setdefault(cell, clut)
+    # animated-texture frames (12B records after the 32B/tile reserved area)
+    anim = off + 131072
+    cell_anim = set()
+    if anim + 2 <= len(d):
+        n1, = struct.unpack_from("<h", d, anim)
+        if 0 <= n1 < 2000:
+            for k in range(n1):
+                u, = struct.unpack_from("<H", d, anim + 2 + k * 12)
+                cell_anim.add((d[anim + 2 + k * 12 + 2] // 64) * cols + u // 64)
+    return {"cols": cols, "rows": h["ih"] // 64, "nCluts": h["ch"],
+            "cellClut": cell_clut, "cellTiles": cell_tiles,
+            "cellAnim": sorted(cell_anim)}
+
+
+def import_cell(dst_entry, src_entry, src_cell, src_clut, dst_cell):
+    """Copy one 64x64 atlas cell (4bpp pixels + its CLUT) from another level's
+    TIM into this level's TIM (modded copy, bootstrapped from vanilla like
+    apply_edits). CLUT strategy: reuse a byte-identical CLUT if the target TIM
+    already has one (e.g. from a previous import), else append a new row —
+    the engine handles variable CLUT counts (vanilla ranges 60..160)."""
+    dst = os.path.join(MODS, dst_entry)
+    if not (os.path.isdir(dst) and glob.glob(os.path.join(dst, "*.PND"))):
+        if os.path.exists(dst):
+            shutil.rmtree(dst)
+        shutil.copytree(os.path.join(BIND, dst_entry), dst)
+
+    s = open(_tim_path(src_entry), "rb").read()
+    sh = _tim_parse(s)
+    dpath = glob.glob(os.path.join(dst, "*.TIM"))[0]
+    d = bytearray(open(dpath, "rb").read())
+    dh = _tim_parse(bytes(d))
+    for name, cell, hh in (("source", src_cell, sh), ("destination", dst_cell, dh)):
+        if not 0 <= cell < (hh["w"] // 64) * (hh["ih"] // 64):
+            raise ValueError(f"{name} cell {cell} out of range")
+    if not 0 <= src_clut < sh["ch"]:
+        raise ValueError(f"source CLUT {src_clut} out of range")
+
+    # CLUT: exact match in destination, else append a row
+    cb = s[sh["cdata"] + src_clut * sh["cw"] * 2:
+           sh["cdata"] + (src_clut + 1) * sh["cw"] * 2]
+    rowb = dh["cw"] * 2
+    clut_idx = next((k for k in range(dh["ch"])
+                     if bytes(d[dh["cdata"] + k * rowb: dh["cdata"] + (k + 1) * rowb]) == cb),
+                    None)
+    appended = clut_idx is None
+    if appended:
+        if dh["ch"] >= 250:            # render/scan ceiling; vanilla max is 160
+            raise ValueError("destination CLUT table is full (250)")
+        clut_idx = dh["ch"]
+        end = dh["cdata"] + dh["ch"] * rowb
+        d[end:end] = cb
+        clen, = struct.unpack_from("<I", d, 8)
+        struct.pack_into("<I", d, 8, clen + rowb)
+        struct.pack_into("<H", d, 18, dh["ch"] + 1)
+        dh = _tim_parse(bytes(d))      # pixel block moved
+
+    # pixels: 64 rows of 32 bytes (cells are 64px-aligned, nibbles never split)
+    scx, scy = (src_cell % (sh["w"] // 64)) * 32, (src_cell // (sh["w"] // 64)) * 64
+    dcx, dcy = (dst_cell % (dh["w"] // 64)) * 32, (dst_cell // (dh["w"] // 64)) * 64
+    srow, drow = sh["iw"] * 2, dh["iw"] * 2
+    for y in range(64):
+        so = sh["pdata"] + (scy + y) * srow + scx
+        do = dh["pdata"] + (dcy + y) * drow + dcx
+        d[do:do + 32] = s[so:so + 32]
+    open(dpath, "wb").write(d)
+
+    imp = _load_imports(dst_entry)
+    imp[dst_cell] = clut_idx
+    json.dump({str(k): v for k, v in imp.items()}, open(_imports_path(dst_entry), "w"))
+    return {"clut": clut_idx, "appended": appended, "nCluts": dh["ch"]}
 
 
 # ------------------------------------------------------------- catalogs ----

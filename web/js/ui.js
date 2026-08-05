@@ -5,6 +5,7 @@ import { modelColor } from './view2d.js';
 import { brush } from './terrain.js';
 import * as TL from './tiles.js';
 import * as CAT from './catalog.js';
+import * as IM from './atlasimport.js';
 
 const $ = id => document.getElementById(id);
 const isAuto = name => /auto/i.test(name || '');
@@ -56,6 +57,7 @@ export function drawPalette() {
   // highlight the selected cell
   x.strokeStyle = '#fff'; x.lineWidth = 2;
   x.strokeRect((TL.T.stamp.cell % cx) * 32 + 1, (TL.T.stamp.cell / cx | 0) * 32 + 1, 30, 30);
+  IM.drawOverlay(x);          // free/used markers while picking an import target
   drawStamp();
 }
 
@@ -82,12 +84,14 @@ function initPalette() {
     const cx = TL.cellsX();
     const cell = Math.floor((e.clientY - r.top) / r.height * (TL.T.atlas.h >> 6)) * cx
                + Math.floor((e.clientX - r.left) / r.width * cx);
+    if (IM.pickActive()) return IM.pickDst(cell);   // import destination pick
     TL.T.stamp.cell = cell;
     const clutSel = +($('pl-clut').value || -1);
     TL.T.stamp.autoClut = clutSel < 0;
     if (clutSel >= 0) TL.T.stamp.clut = clutSel;
     store.emit('stamp');
   };
+  IM.initImport();
   $('pl-clut').onchange = () => {
     const v = +$('pl-clut').value;
     TL.T.stamp.autoClut = v < 0;
@@ -205,7 +209,7 @@ export function initUI(onViewMode) {
     if (what === 'level') onLevel();
     if (what === 'recipes' || what === 'level') renderRecipes();
     if (what === 'view' || what === 'layers' || what === 'level') syncViewControls();
-    if (what === 'stamp' || what === 'atlas') drawPalette();
+    if (what === 'stamp' || what === 'atlas' || what === 'palette') drawPalette();
     refreshInspector();
     $('dirty').textContent = store.dirty ? '● unsaved changes' : '';
     $('st-sel').textContent = store.sel ? selLabel() : '';

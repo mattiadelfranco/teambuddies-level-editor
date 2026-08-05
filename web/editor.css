@@ -23,9 +23,9 @@ body {
 #subbar input[type=range], #subbar-tiles input[type=range] { width: 90px; }
 #tl-stamp { width: 28px; height: 28px; image-rendering: pixelated;
   border: 1px solid #3a3f4a; border-radius: 4px; background: #000; }
-#pl-atlas { width: 100%; image-rendering: pixelated; border: 1px solid #3a3f4a;
+#pl-atlas, #im-atlas { width: 100%; image-rendering: pixelated; border: 1px solid #3a3f4a;
   border-radius: 4px; cursor: crosshair; background: #000; }
-#pl-stamp { width: 48px; height: 48px; image-rendering: pixelated;
+#pl-stamp, #im-prev { width: 48px; height: 48px; image-rendering: pixelated;
   border: 1px solid #3a3f4a; border-radius: 4px; background: #000; }
 
 /* ---- catalog grid ---- */

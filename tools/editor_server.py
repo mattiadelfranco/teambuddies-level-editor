@@ -15,6 +15,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tb_lod
 import tb_level
+import tb_fastiso
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIND = os.path.join(ROOT, "teambudd/dat_estratto/bind")
@@ -713,6 +714,78 @@ def api_3d(entry):
     return out
 
 
+def _pad_decode(w0, w1):
+    """Decoder ESATTO del record frame 8B dei .PAD (da 0x800B1778, trovato
+    con breakpoint runtime via DuckStation MCP): 3 rotazioni a 8 bit scalate
+    x16 (PSX 0x1000 = giro) + traslazione 14/13/13 bit con segno."""
+    def sra(x, n):
+        x &= 0xffffffff
+        return ((x ^ 0x80000000) >> n) - (0x80000000 >> n)
+    def s16(v):
+        v &= 0xffff
+        return v - 65536 if v >= 32768 else v
+    rot = (((w0 >> 16) & 0xff) << 4, ((w0 >> 8) & 0xff) << 4, (w0 & 0xff) << 4)
+    tr = (s16((sra((w0 << 1) & 0xffffffff, 19) & 0xffc0) | ((w1 >> 26) & 0x3f)),
+          s16(sra((w1 << 6) & 0xffffffff, 19) & 0xffff),
+          s16(sra((w1 << 19) & 0xffffffff, 19) & 0xffff))
+    return rot, tr
+
+
+def _pad_pose(pad_bytes, frame=0):
+    """Trasformazioni per-osso di un frame: [(R 3x3, T), ...].
+    Il runtime NEGA i 3 angoli e costruisce la matrice (0x800b0e84);
+    qui replichiamo con Rx*Ry*Rz sugli angoli negati. Spazio y-GIU'
+    (traslazioni: occhi a y=-354 = in alto)."""
+    import math
+    nf, nb = struct.unpack_from("<2H", pad_bytes, 4)
+    frame = max(0, min(nf - 1, frame))
+    stride = 32 + nf * 8
+    out = []
+    for b in range(nb):
+        base = 8 + b * stride
+        w0, w1 = struct.unpack_from("<2I", pad_bytes, base + 32 + frame * 8)
+        rot, tr = _pad_decode(w0, w1)
+        a = [-(r / 4096.0) * 2 * math.pi for r in rot]     # angoli negati
+        cx, sx = math.cos(a[0]), math.sin(a[0])
+        cy, sy = math.cos(a[1]), math.sin(a[1])
+        cz, sz = math.cos(a[2]), math.sin(a[2])
+        Rx = ((1, 0, 0), (0, cx, -sx), (0, sx, cx))
+        Ry = ((cy, 0, sy), (0, 1, 0), (-sy, 0, cy))
+        Rz = ((cz, -sz, 0), (sz, cz, 0), (0, 0, 1))
+        def mul(A, B):
+            return tuple(tuple(sum(A[i][k] * B[k][j] for k in range(3))
+                               for j in range(3)) for i in range(3))
+        out.append((mul(mul(Rx, Ry), Rz), tr))
+    return out
+
+
+def _pose_buddy(lod_bytes, pad_bytes):
+    """Posa statica di un modello animato: part k trasformata dall'osso k
+    (v_ydown = (b, -a, c); v' = R*v + T; ritorno a (a,b,c))."""
+    m = tb_lod.parse_lod(lod_bytes)
+    bones = _pad_pose(pad_bytes, 0)
+    for lod in m["lods"]:
+        for k, p in enumerate(lod["parts"]):
+            if k >= len(bones) or not p["verts"]:
+                continue
+            R, T = bones[k]
+            def xf(a, b, c):
+                x, y, z = b, -a, c
+                nx = R[0][0] * x + R[0][1] * y + R[0][2] * z + T[0]
+                ny = R[1][0] * x + R[1][1] * y + R[1][2] * z + T[1]
+                nz = R[2][0] * x + R[2][1] * y + R[2][2] * z + T[2]
+                return (-ny, nx, nz)
+            def xfn(a, b, c):
+                x, y, z = b, -a, c
+                nx = R[0][0] * x + R[0][1] * y + R[0][2] * z
+                ny = R[1][0] * x + R[1][1] * y + R[1][2] * z
+                nz = R[2][0] * x + R[2][1] * y + R[2][2] * z
+                return (-ny, nx, nz)
+            p["verts"] = [xf(*v) for v in p["verts"]]
+            p["norms"] = [xfn(*n) for n in p["norms"]]
+    return m
+
+
 def _pose_turret(lod_bytes):
     """POSA STATICA per i modelli torretta: i .LOD hanno 5 part con un'unica
     origine e la CANNA modellata in VERTICALE (bbox a>=150: in gioco il motore
@@ -746,7 +819,18 @@ def api_global3d(dat):
               if f.endswith(".LOD") and not f.startswith("P_")]
     tims = [(f, open(os.path.join(folder, f), "rb").read())
             for f in sorted(os.listdir(folder)) if f.endswith(".TIM")]
-    out = _build_3d(models, tims, pose=_pose_turret)
+    pads = [open(os.path.join(folder, f), "rb").read()
+            for f in sorted(os.listdir(folder)) if f.endswith(".PAD")]
+
+    # NB: _pose_buddy (posa scheletrale dai .PAD) NON e' usata: il decoder dei
+    # frame e' corretto (vedi tb_pad.py) ma i vertici delle part sono gia' in
+    # posa di riposo nello spazio modello, quindi la trasformazione osso va
+    # applicata come DELTA rispetto a una bind pose ancora da identificare.
+    # Le anteprime restano statiche (rese gia' buone); vedi docs/FORMATS.md.
+    def pose(lod_bytes):
+        return _pose_turret(lod_bytes)
+
+    out = _build_3d(models, tims, pose=pose)
     _3D_CACHE[key] = out
     return out
 
@@ -768,27 +852,59 @@ def ground3d_png(entry, px=64):
         return None
     os.makedirs(GROUNDS3D, exist_ok=True)
     dst = os.path.join(GROUNDS3D, entry + ".png")
-    if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(pnds[0]):
+    # atlas imports touch the TIM without touching the PND: check both mtimes
+    srcs = pnds + _glob.glob(os.path.join(folder, "*.TIM"))
+    if not os.path.exists(dst) or os.path.getmtime(dst) < max(map(os.path.getmtime, srcs)):
         import render_ground
         render_ground.render(folder, dst, px)
     return dst
 
 
+DAT_DEV = DAT + ".dev"           # base a slot espansi (tools/tb_expand.py)
+ISO_BIN = os.path.join(ROOT, "teambudd/rebuild.bin")
+ESTRATTO = os.path.join(ROOT, "teambudd/estratto")
+
+
 def build_iso():
-    """Applica i mods al DAT (in-place o ricollocando in coda, senza limiti di slot),
-    patcha ENG.BIN (campo team lista extra) e ricostruisce l'ISO."""
+    """Applica i mods al DAT e aggiorna la ISO. Base = BUDDIES.DAT.dev (slot
+    espansi) se esiste. FAST PATH: se il layout non è cambiato (stessa size di
+    DAT/ENG/GAME nella ISO) riscrive in-place solo i settori cambiati di
+    rebuild.bin -> i savestate dell'emulatore restano validi e non serve
+    nemmeno riaprire l'immagine. Altrimenti rebuild completo con mkpsxiso
+    (e savestate da rifare)."""
     log = []
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools/tb_patch_eng.py")],
                        capture_output=True, text=True)
     log.append(r.stdout.strip() or r.stderr.strip())
     if r.returncode != 0:
         return {"ok": False, "log": log}
+    base = DAT_DEV if os.path.exists(DAT_DEV) else DAT_ORIG
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools/tb_rebuild.py"),
-                        DAT_ORIG, MODS, DAT, MANIFEST],
+                        base, MODS, DAT, MANIFEST],
                        capture_output=True, text=True)
-    log.append(r.stdout.strip() or r.stderr.strip())
+    rebuild_out = r.stdout.strip() or r.stderr.strip()
+    log.append(rebuild_out)
     if r.returncode != 0:
         return {"ok": False, "log": log}
+    if base == DAT_ORIG:
+        log.append("(suggerimento: `python3 tools/tb_expand.py` crea la base a "
+                   "slot espansi: con quella i savestate restano quasi sempre validi)")
+    if "ricollocato" in rebuild_out:
+        log.append("⚠ una entry ha sforato il suo slot: layout del DAT cambiato "
+                   "(se succede spesso, aumenta lo slack: tools/tb_expand.py --level-slack 128)")
+    # --- fast path: patch in-place della ISO esistente ---
+    if os.path.exists(ISO_BIN):
+        try:
+            n = 0
+            for name in ("BUDDIES.DAT", "ENG.BIN", "GAME.BIN"):
+                p = DAT if name == "BUDDIES.DAT" else os.path.join(ESTRATTO, name)
+                n += tb_fastiso.patch_file(ISO_BIN, name, open(p, "rb").read())
+            log.append(f"⚡ ISO aggiornata in-place ({n} settori riscritti): "
+                       "carica il savestate e prova il livello")
+            return {"ok": True, "log": log}
+        except (ValueError, FileNotFoundError) as e:
+            log.append(f"patch in-place non possibile ({e})")
+    # --- rebuild completo ---
     mk = os.path.join(ROOT, "mkpsxiso/build/mkpsxiso")
     if not os.path.exists(mk):
         log.append("mkpsxiso non trovato: esegui prima `python3 tools/setup.py`")
@@ -798,6 +914,9 @@ def build_iso():
                        cwd=os.path.join(ROOT, "teambudd"), capture_output=True, text=True)
     ok = "successfully" in r.stdout
     log.append(r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr[-200:])
+    if ok:
+        log.append("⚠ ISO ricostruita da zero (layout cambiato): riavvia il gioco "
+                   "nell'emulatore e rifai il savestate alla selezione livello")
     return {"ok": ok, "log": log}
 
 
@@ -810,6 +929,7 @@ class H(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(b)))
+        self.send_header("Cache-Control", "no-cache")   # atlas reloads after imports
         self.end_headers()
         self.wfile.write(b)
 
@@ -849,6 +969,14 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "unknown level"}, 404)
             try:
                 return self._json(tb_level.atlas(entry))
+            except Exception as e:
+                return self._json({"err": str(e)}, 500)
+        if self.path.startswith("/api/tileinfo/"):
+            entry = self.path.split("/")[-1].split("?")[0]
+            if not (entry.isdigit() and os.path.isdir(os.path.join(BIND, entry))):
+                return self._json({"err": "unknown level"}, 404)
+            try:
+                return self._json(tb_level.tileinfo(entry))
             except Exception as e:
                 return self._json({"err": str(e)}, 500)
         if self.path.startswith("/api/global3d/"):
@@ -908,6 +1036,15 @@ class H(BaseHTTPRequestHandler):
                 self._json(res)
             elif self.path == "/api/build":
                 self._json(build_iso())
+            elif self.path == "/api/import_cell":
+                for k in ("dst", "src"):
+                    e = str(body.get(k, ""))
+                    if not (e.isdigit() and os.path.isdir(os.path.join(BIND, e))):
+                        return self._json({"err": f"unknown level in '{k}'"}, 404)
+                os.makedirs(MODS, exist_ok=True)
+                self._json(tb_level.import_cell(
+                    str(body["dst"]), str(body["src"]), int(body["srcCell"]),
+                    int(body["srcClut"]), int(body["dstCell"])))
             else:
                 self._json({"err": "not found"}, 404)
         except Exception as e:
@@ -915,5 +1052,6 @@ class H(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print("Editor: http://localhost:8787  (Ctrl+C to quit)")
-    HTTPServer(("127.0.0.1", 8787), H).serve_forever()
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
+    print(f"Editor: http://localhost:{port}  (Ctrl+C to quit)")
+    HTTPServer(("127.0.0.1", port), H).serve_forever()

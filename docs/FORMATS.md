@@ -380,7 +380,7 @@ enemies.
 
 ---
 
-## PAD0 — skeletal animation data (.PAD, partially reversed)
+## PAD0 — skeletal animation data (.PAD)
 
 Every animated global model folder (buddies, animals, weapons) pairs its
 `.LOD` with an `AGENTn.PAD` / `WEAP_n.PAD` file:
@@ -389,23 +389,44 @@ Every animated global model folder (buddies, animals, weapons) pairs its
 0    "PAD0"
 4    u16 n_frames
 6    u16 n_bones            (== part count of the paired .LOD)
-8    per bone: char name[32] ("bone_back", "bone_heel_l", ... "eyes")
-             + n_frames * 8-byte frame records
+8    per bone: char name[32] + n_frames * 8-byte frame records
 ```
 
-The 8-byte frame record is still being decoded: the first two s16 are smooth
-angle-like streams, the rest is bit-packed (a constant low field that looks
-like a flag, plus two more smooth packed streams). Code anchors (ENG):
+Bone names are meaningful: `bone_back`, `bone_heel_l/r`, `bone_toes_l/r`,
+`bone_palm_l/r`, `bone_fing_l/r`, `eyes` (Commando); `backbone`,
+`l_front_hoof_bone`, `tail_bone`, `exit_1_lion` (Lion).
 
-- `FUN_800adc3c` — PAD loader (magic check + copy), counter `DAT_800be728`.
-- `FUN_800958a4` — parser of `R_ANIMATIONS.BIN` (member 5 of the 0955 BIND,
-  reached from `FUN_800a4830` via the BIND directory offsets `+0x28..+0xf0`
-  for members 0-5). Header `[u16][u16 n1][u16 n2]` + 12-byte records; builds
-  0x8c-byte runtime animation structs (`DAT_800bcae4`, init `FUN_80095848`)
-  hooked into the 62-slot type table at `+0x40`.
-- `FUN_80095d64` — animation channel bookkeeping (12 channels selected by
-  flag bits of the 12-byte records).
+### The 8-byte frame record
 
-Turret models have **no PAD**: their assembly/pose comes from elsewhere
-(VEHICLES.BIN records or code) — the editor uses a data-driven rest-pose
-approximation for previews.
+Recovered from the running game with a read watchpoint on a PAD buffer in
+RAM: the evaluator is `FUN_800ADDA0` (ENG) and the unpacker it calls is at
+`0x800B1778`. Reader: `tools/tb_pad.py`.
+
+```
+w0, w1 = u32 LE pair
+rot_x = ((w0 >> 16) & 0xff) << 4        PSX angle units, 0x1000 = full turn
+rot_y = ((w0 >>  8) & 0xff) << 4
+rot_z = ( w0        & 0xff) << 4
+tx    = s16( (sra(w0 << 1, 19) & 0xffc0) | (w1 >> 26) )    14 bits
+ty    = s16(  sra(w1 << 6, 19) )                           13 bits
+tz    = s16(  sra(w1 << 19, 19) )                          13 bits
+```
+
+So each frame packs 3 rotations at 8-bit precision (scaled ×16) plus a
+signed translation, in the model's y-down space (a Lion's legs come out at
+±x, front/rear at ±z, the tail behind — an unambiguous sanity check).
+
+The evaluator negates the three angles (`subu` + `andi 0xfff`) before
+building the matrix (`0x800b0e84`) and writes 32-byte PSX `MATRIX` entries;
+the animation table itself is `R_ANIMATIONS.BIN` (member 5 of the 0955 BIND,
+parser `FUN_800958a4`, 0x8c runtime structs at `DAT_800bcae4`, channel
+bookkeeping in `FUN_80095d64`).
+
+**Still open — posing a model:** applying `v' = R·v + T` per part scatters
+the parts, because `.LOD` vertices are already in a rest pose in model
+space: the bone transform must be applied as a *delta* against a bind pose
+that has not been identified yet. Until then the editor previews models
+statically (turrets get a data-driven rest-pose approximation).
+
+Turret models have **no PAD**: their assembly comes from elsewhere
+(VEHICLES.BIN records or code).
