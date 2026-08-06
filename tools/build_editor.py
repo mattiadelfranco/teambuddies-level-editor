@@ -162,7 +162,7 @@ MSET = {}
 for _m in range(_nrec):
     _r = 4 + _m * 0x80
     _zc, _zs = struct.unpack_from("<II", _lv, _r + 0x74)
-    ZCFG[_m] = [list(struct.unpack_from("<2I2I2i2I2H", _lv, _t3 + (_zs + _k) * 40))
+    ZCFG[_m] = [list(struct.unpack_from("<4I2i4I", _lv, _t3 + (_zs + _k) * 40))
                 for _k in range(min(_zc, 16))]
     MSET[_m] = struct.unpack_from("<I", _lv, _r + 0x68)[0]   # set ricette casse
 

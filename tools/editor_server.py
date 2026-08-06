@@ -250,8 +250,19 @@ def _zone_center(idx):
 
 def apply_zonecfg(mission, entries):
     """Config casse per-zona della missione (LEVELS.BIN, BIND 0955): entries =
-    lista per-zona (ordine s3) di 10 interi [tipo0,tipo1,init0,init1,tgt0,tgt1,
-    rate0,rate1,a0,a1] oppure None = default motore (ammesso solo in coda).
+    lista per-zona (ordine s3) di 10 interi = 5 parametri x 2 stream
+    (slot0 = casse NORMALI, slot1 = MEGA-casse):
+    [iniz0,iniz1, start0,start1, end0,end1, rate0,rate1, max0,max1]
+    - iniz  = casse lanciate SUBITO a inizio livello (burst, applier ENG
+              FUN_8007057c -> FUN_800e9e58; rispetta il tetto max)
+    - start = frame di inizio dello stream (25 frame = 1s PAL)
+    - end   = frame di fine (negativo = mai; budget lanci = (end-start)/rate,
+              end=0 = illimitato)
+    - rate  = frame tra un lancio e l'altro
+    - max   = tetto casse vive a terra dello stream (0 = stream spento)
+    oppure None = default motore (ammesso solo in coda).
+    RECORD = 10 x u32 (40B pieni): NON <2I2I2i2I2H> — a1 sta a +36, il vecchio
+    formato lo lasciava a 0 spegnendo il flusso MEGA delle config custom.
     Le voci vanilla sono CONDIVISE tra missioni: mai modificarle in place —
     si appende un blocco custom in coda alla tabella (chiude il file) e si
     punta la missione lì (+0x74 count, +0x78 start)."""
@@ -288,7 +299,7 @@ def apply_zonecfg(mission, entries):
             for j, v in enumerate(vals):
                 if j not in (4, 5) and v < 0:
                     raise ValueError(f"zoneCfg zona {i + 1}: solo tgt può essere negativo (-30 = infinito)")
-            struct.pack_into("<2I2I2i2I2H", d, t3 + (start + i) * 40, *vals)
+            struct.pack_into("<4I2i4I", d, t3 + (start + i) * 40, *vals)
     else:
         start = 0                                  # count=0: tutte default motore
     struct.pack_into("<II", d, r + 0x74, len(entries), start)

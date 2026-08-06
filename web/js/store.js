@@ -8,14 +8,16 @@ function u8b64(a) {
   return btoa(s);
 }
 
+// [initial, start, end, rate, max] x 2 stream (NORMAL, MEGA) — interleaved:
+// [iniN,iniM, startN,startM, endN,endM, rateN,rateM, maxN,maxM]
 export const ZONE_PRESETS = {
-  'rich (t4, every 30)':      [4, 0, 0, 0, -30, -30, 30, 3600, 8, 0],
-  'standard (t3, every 150)': [3, 0, 0, 0, 45000, 0, 150, 0, 4, 0],
-  'light (t1, every 150)':    [1, 0, 0, 0, 45000, 0, 150, 0, 2, 0],
-  'mega (t10, every 90)':     [10, 0, 0, 3600, -30, -30, 90, 900, 6, 0],
-  'campaign (t5, every 120)': [5, 0, 0, 1800, 45000, 45000, 120, 300, 5, 0],
-  'nearly dead (vanilla)':    [0, 0, 0, 900, 0, -30, 0, 900, 0, 0],
-  'engine default':           null,
+  'rich (4 at start, every 30)':      [4, 0, 0, 0, -30, -30, 30, 3600, 8, 1],
+  'standard (3 at start, every 150)': [3, 0, 0, 0, 45000, 0, 150, 0, 4, 0],
+  'light (1 at start, every 150)':    [1, 0, 0, 0, 45000, 0, 150, 0, 2, 0],
+  'mega (10 at start, every 90)':     [10, 0, 0, 3600, -30, -30, 90, 900, 6, 1],
+  'campaign (5 at start, every 120)': [5, 0, 0, 1800, 45000, 45000, 120, 300, 5, 1],
+  'nearly dead (vanilla)':            [0, 0, 0, 0, 0, -30, 0, 900, 0, 2],
+  'engine default':                   null,
 };
 
 export const tos16 = v => (v >= 32768 ? v - 65536 : v);

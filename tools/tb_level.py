@@ -174,6 +174,7 @@ def parse_level(entry):
     lvl["tiles"] = _b64(d[off_tiles: off_tiles + 4096 * 28])
     anim = off_tiles + 131072            # engine reserves 32B/tile
     lvl["animTiles"] = []
+    lvl["animWater"] = []
     if anim + 2 <= len(d):
         n1 = struct.unpack_from("<h", d, anim)[0]
         o2 = anim + 2 + max(n1, 0) * 12
@@ -182,6 +183,10 @@ def parse_level(entry):
             if n2 < 2000 and o2 + 2 + n2 * 16 <= len(d):
                 lvl["animTiles"] = sorted({struct.unpack_from("<H", d, o2 + 2 + k * 16)[0]
                                            for k in range(n2)})
+                # type byte 2 = water: pads placed on these turn the pool into
+                # an invisible liquid trap (the save drops the animation)
+                lvl["animWater"] = sorted({struct.unpack_from("<H", d, o2 + 2 + k * 16)[0]
+                                           for k in range(n2) if d[o2 + 2 + k * 16 + 2] == 2})
 
     # ---- PTH (AI walkability): the 128x128 half-tile grid starts at OFFSET 0
     # (no header!); the trailing 32B (112B on 0543) are an unknown footer.
@@ -458,7 +463,7 @@ def catalogs():
     for m in range(nrec):
         r = 4 + m * 0x80
         zc, zs = struct.unpack_from("<II", lv, r + 0x74)
-        zcfg[m] = [list(struct.unpack_from("<2I2I2i2I2H", lv, t3 + (zs + k) * 40))
+        zcfg[m] = [list(struct.unpack_from("<4I2i4I", lv, t3 + (zs + k) * 40))
                    for k in range(min(zc, 16))]
         mset[m] = struct.unpack_from("<I", lv, r + 0x68)[0]
     out["zcfg"], out["mset"] = zcfg, mset

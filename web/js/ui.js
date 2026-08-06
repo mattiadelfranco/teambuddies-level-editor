@@ -423,27 +423,27 @@ function refreshInspector() {
         .map(k => `<option>${k}</option>`).join('')}</select>
       <button id="if-zapply">Apply</button></div>
       <div class="hint">Two independent drop streams: NORMAL crates and MEGA crates (big
-        model, worth more). One crate every RATE frames, from frame START to frame END
-        (end &lt; 0 = forever), max MAX of this stream's crates on the ground at once
-        (25 frames = 1s). TYPE is not read by the drop scheduler (mission-script data;
-        effect unverified) — timing and amounts live entirely in the other 4 columns.</div>
-      <div class="grid"><span></span><span>type</span><span>start</span><span>end</span><span>rate</span><span>max</span>
+        model, worth more). INITIAL crates land instantly at level start; then one crate
+        every RATE frames from frame START to frame END (end &lt; 0 = forever, 25 frames
+        = 1s), holding at most MAX of this stream's crates on the ground — 0 = stream
+        off, and the initial burst is capped by MAX too.</div>
+      <div class="grid"><span></span><span>initial</span><span>start</span><span>end</span><span>rate</span><span>max</span>
       <span>NORMAL</span>${[0, 2, 4, 6, 8].map(k => `<input id="if-zc${k}" type="number" value="${c ? c[k] : ''}">`).join('')}
       <span>MEGA</span>${[1, 3, 5, 7, 9].map(k => `<input id="if-zc${k}" type="number" value="${c ? c[k] : ''}">`).join('')}</div>`;
     $('if-zapply').onclick = () => store.apply(s => {
       const v = ZONE_PRESETS[$('if-zpre').value];
       s.ed.zcfg[sel.i] = v ? v.slice() : null;
       if (v) for (let j = 0; j < sel.i; j++) if (!s.ed.zcfg[j]) {
-        s.ed.zcfg[j] = ZONE_PRESETS['standard (t3, every 150)'].slice();
+        s.ed.zcfg[j] = ZONE_PRESETS['standard (3 at start, every 150)'].slice();
         s.log = `note: zone ${j + 1} was "engine default" (only allowed at the tail): set to "standard".`;
       }
       s.ed.zcfgTouched = true;
     });
     for (let k = 0; k < 10; k++) $('if-zc' + k).onchange = () => store.apply(s => {
       if (!s.ed.zcfg[sel.i]) {
-        s.ed.zcfg[sel.i] = ZONE_PRESETS['standard (t3, every 150)'].slice();
+        s.ed.zcfg[sel.i] = ZONE_PRESETS['standard (3 at start, every 150)'].slice();
         for (let j = 0; j < sel.i; j++)
-          if (!s.ed.zcfg[j]) s.ed.zcfg[j] = ZONE_PRESETS['standard (t3, every 150)'].slice();
+          if (!s.ed.zcfg[j]) s.ed.zcfg[j] = ZONE_PRESETS['standard (3 at start, every 150)'].slice();
       }
       for (let j = 0; j < 10; j++) {
         const v = parseInt($('if-zc' + j).value, 10);
@@ -484,6 +484,9 @@ function refreshInspector() {
       : 'Exit pad: something else points here. Explosions never crater teleport zones.';
   } else if (sel.k === 's0') {
     F.innerHTML = '';
+    const w = It.padWaterWarning(it.x, it.z);
+    if (w) { note.textContent = w; note.style.color = '#ff8f8f'; }
+    else note.style.color = '';
     note.textContent = `Pad ${sel.i + 1}: spawn + stacking logic. The painted 2x2 pad art follows the `
       + 'marker live (the ground around it stays put); animations + terrain flattening apply on save. '
       + 'Teams claim the nearest base, in pad order.';

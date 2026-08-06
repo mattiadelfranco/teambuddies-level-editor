@@ -104,6 +104,27 @@ export function owner(it) {
   return best;   // {team, base:{i, x(tile), z(tile)}}
 }
 
+
+// Animated tiles (water, pad arrows) under a pad's 4x4 footprint. Dropping a
+// pad on water is a trap: the save repaints those tiles and drops their water
+// animation, so the pool stops being drawn while the terrain keeps behaving
+// like liquid — invisible zones that kill you.
+export function padWaterWarning(wx, wz) {
+  const l = store.lvl;
+  if (!l || !l.animTiles || !l.animWater) return '';
+  const cx = Math.floor(wx / 8 - 0.5) - 1, cz = Math.floor(wz / 8 - 0.5) - 1;
+  const hits = [];
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) {
+    const t = (cz + j) * 64 + (cx + i);
+    if (l.animWater.includes(t)) hits.push([cx + i, cz + j]);
+  }
+  return hits.length
+    ? `⚠ this pad covers ${hits.length} WATER tile(s) (e.g. ${hits[0][0]},${hits[0][1]}): `
+      + 'saving repaints them and removes their water animation — the pool goes '
+      + 'invisible but the ground still behaves like liquid and kills you. Move the pad onto dry land.'
+    : '';
+}
+
 export function heightAt(tx, tz) {
   const hm = store.hm;
   if (!hm) return 0;
