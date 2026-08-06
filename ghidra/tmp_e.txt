@@ -1,0 +1,12 @@
+INFO  DumpFuncs.java> === 0x800e9d38 in FUN_800e9d30 @ 800e9d30 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+void FUN_800e9d30(int param_1)
+
+{
+  *(undefined **)(param_1 + 4) = &DAT_800c64a0;
+  func_0x80074ad0();
+  return;
+}
+
+ (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /GAME.BIN (HeadlessAnalyzer)  

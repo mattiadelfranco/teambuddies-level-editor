@@ -1,0 +1,46 @@
+INFO  DumpFuncs.java> === 0x800e9160 in FUN_800e9160 @ 800e9160 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+void FUN_800e9160(int param_1)
+
+{
+  undefined4 uVar1;
+  
+  *(uint *)(param_1 + 0xb8) = *(uint *)(param_1 + 0xb8) & 0xffffff7f | 0x40;
+  uVar1 = func_0x80096d48(1);
+  *(undefined4 *)(param_1 + 0xe4) = uVar1;
+  DAT_80119c10 = DAT_80119c10 + 1;
+  return;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x800e6708 in FUN_800e6708 @ 800e6708 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+int FUN_800e6708(int param_1)
+
+{
+  undefined4 uVar1;
+  
+  func_0x800757dc();
+  *(undefined **)(param_1 + 4) = &DAT_800c63d0;
+  *(undefined2 *)(param_1 + 0xc0) = 0x15;
+  *(undefined2 *)(param_1 + 0xd6) = 0x80;
+  *(undefined2 *)(param_1 + 0xda) = 0x1000;
+  *(undefined4 *)(param_1 + 100) = 0;
+  *(undefined4 *)(param_1 + 0xe8) = 0;
+  *(undefined4 *)(param_1 + 0xec) = 0;
+  *(undefined4 *)(param_1 + 0xbc) = 0;
+  *(undefined2 *)(param_1 + 0xd4) = 0;
+  *(undefined2 *)(param_1 + 0xdc) = 0;
+  *(undefined2 *)(param_1 + 0xd8) = 0;
+  *(undefined2 *)(param_1 + 0xe2) = 0;
+  *(undefined2 *)(param_1 + 0xe0) = 0;
+  *(undefined2 *)(param_1 + 0xde) = 0;
+  *(undefined4 *)(param_1 + 0xc4) = 0xfaceface;
+  *(undefined4 *)(param_1 + 0xb8) = 0;
+  *(undefined4 *)(param_1 + 0x78) = 4;
+  uVar1 = func_0x80096d48(0);
+  *(undefined4 *)(param_1 + 0xe4) = uVar1;
+  return param_1;
+}
+
+ (GhidraScript)  

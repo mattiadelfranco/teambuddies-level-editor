@@ -423,26 +423,42 @@ def apply_edits(entry, edits):
             offs = [v + delta if v > offs[0] else v for v in offs]
             struct.pack_into("<17I", d, 8, *offs)
 
-    # s3: ZONE LANCIO CASSE, lista di centri [cx,cz] in tile. La consegna va
-    # alla zona più vicina al richiedente (FUN_800e4dc8): per N team servono
-    # N zone, una vicino a ogni pedana. Zone oltre il count vanilla = clone
-    # della forma della zona 1 traslata; la sezione viene ricostruita.
+    # s3: ZONE LANCIO CASSE, lista [cx,cz] o [cx,cz,tpl] in tile (tpl = indice
+    # della zona di cui clonare la FORMA, mandato dal client per le duplicate).
+    # La consegna va alla zona più vicina al richiedente (FUN_800e4dc8); ogni
+    # lancio cade su un mezzo-tile A CASO della forma (FUN_800e9e58) con tetto
+    # di casse vive per zona: una forma degenere (1 mezzo-tile, es. zona 1 di
+    # WHORA) impila tutto in un punto e sembra "non funzionare". Zone oltre il
+    # count VANILLA con forma < 4 mezzi-tile vengono quindi rigenerate come
+    # blocco standard 4x4 mezzi-tile (risana anche i salvataggi passati); la
+    # sezione viene ricostruita.
     if "s3" in edits:
         zones, o3, end3 = _parse_s3(d, offs)
         if not zones:
             raise ValueError("s3: il livello non ha zone casse da usare come modello")
+        van = open(os.path.join(BIND, entry, os.path.basename(pld_path)), "rb").read()
+        van_cnt = struct.unpack_from("<I", van,
+                                     struct.unpack_from("<17I", van, 8)[3] + 8)[0]
         centers = [_zone_center(z) for z in zones]
         new_zones = []
         for i, c in enumerate(edits["s3"]):
-            src, src_c = (zones[i], centers[i]) if i < len(zones) else (zones[0], centers[0])
-            dx = int(round((c[0] - src_c[0]) * 2))
-            dz = int(round((c[1] - src_c[1]) * 2))
-            nz = []
-            for t in src:
-                hx, hz = t % 128 + dx, t // 128 + dz
-                if not (0 <= hx < 128 and 0 <= hz < 128):
-                    raise ValueError(f"s3: zona {i + 1} fuori mappa")
-                nz.append(hz * 128 + hx)
+            tpl = int(c[2]) if len(c) > 2 and 0 <= int(c[2]) < len(zones) else None
+            j = i if i < len(zones) else (0 if tpl is None else tpl)
+            src, src_c = zones[j], centers[j]
+            if i >= van_cnt and len(src) < 4:
+                # forma degenere: blocco standard 4x4 mezzi-tile sul centro
+                hx0 = max(0, min(124, int(round(c[0] * 2 - 2))))
+                hz0 = max(0, min(124, int(round(c[1] * 2 - 2))))
+                nz = [(hz0 + b) * 128 + hx0 + a for b in range(4) for a in range(4)]
+            else:
+                dx = int(round((c[0] - src_c[0]) * 2))
+                dz = int(round((c[1] - src_c[1]) * 2))
+                nz = []
+                for t in src:
+                    hx, hz = t % 128 + dx, t // 128 + dz
+                    if not (0 <= hx < 128 and 0 <= hz < 128):
+                        raise ValueError(f"s3: zona {i + 1} fuori mappa")
+                    nz.append(hz * 128 + hx)
             new_zones.append(nz)
         payload = bytearray(struct.pack("<I", len(new_zones)))
         for z in new_zones:

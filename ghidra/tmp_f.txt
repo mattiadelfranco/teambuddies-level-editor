@@ -1,0 +1,75 @@
+INFO  DumpFuncs.java> === 0x800ea200 in FUN_800ea0f0 @ 800ea0f0 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+void FUN_800ea0f0(int param_1,undefined2 param_2)
+
+{
+  uint uVar1;
+  int iVar2;
+  uint uVar3;
+  int iVar4;
+  int iVar5;
+  uint uVar6;
+  short *psVar7;
+  int iVar8;
+  uint uVar9;
+  
+  uVar1 = _DAT_800c048c;
+  uVar9 = 0;
+  iVar8 = param_1 + 0x30;
+  do {
+    uVar6 = 1;
+    iVar2 = uVar9 * 4;
+    if ((*(int *)(iVar8 + iVar2) == 0) &&
+       (uVar3 = *(uint *)(param_1 + iVar2 + 0x3c), 0 < (int)uVar3)) {
+      uVar6 = uVar1 < uVar3 ^ 1;
+    }
+    uVar3 = *(uint *)(param_1 + iVar2 + 0x44);
+    if (((-1 < (int)uVar3) && (uVar3 <= uVar1)) || (*(int *)(param_1 + 0x38) != 0)) {
+      uVar6 = 0;
+      *(undefined4 *)(iVar8 + iVar2) = 0;
+    }
+    iVar4 = uVar9 * 2;
+    iVar5 = (int)*(short *)(param_1 + iVar4 + 0x1e);
+    if ((iVar5 <= (int)(uint)*(ushort *)(param_1 + iVar4 + 0x22)) && (-1 < iVar5)) {
+      uVar6 = 0;
+      *(undefined4 *)(iVar8 + iVar2) = 0;
+    }
+    if (uVar6 != 0) {
+      psVar7 = (short *)(param_1 + 0x2a + iVar4);
+      *(uint *)(iVar8 + iVar2) = uVar6;
+      if (*psVar7 == 0) {
+        FUN_800e9e58(param_1,param_2,uVar9);
+        *psVar7 = *(short *)(param_1 + iVar4 + 0x26);
+      }
+      else {
+        *psVar7 = *psVar7 + -1;
+      }
+    }
+    uVar9 = uVar9 + 1 & 0xffff;
+  } while (uVar9 < 2);
+  return;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x800e4744 in FUN_800e4744 @ 800e4744 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+undefined * FUN_800e4744(void)
+
+{
+  short sVar1;
+  undefined *puVar2;
+  
+  if (DAT_80116040 < 0x2d) {
+    sVar1 = func_0x800749c4();
+    puVar2 = &DAT_80116054 + sVar1 * 0xf0;
+    *(short *)(&DAT_8011609e + sVar1 * 0xf0) = sVar1;
+  }
+  else {
+    puVar2 = (undefined *)0x0;
+  }
+  return puVar2;
+}
+
+ (GhidraScript)  

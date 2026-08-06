@@ -226,7 +226,9 @@ export function duplicateSel() {
     const r = st.inst[sel.i].slice(); r[1] -= 8;
     st.inst.push(r); store.sel = { k: 'in', i: st.inst.length - 1 };
   } else if (sel.k === 'cz') {
-    const r = st.s3[sel.i].slice(); r[0] = Math.min(59, r[0] + 4);
+    const r = st.s3[sel.i].slice();
+    if (r.length < 3) r[2] = sel.i;   // il server clona la FORMA di questa zona
+    r[0] = Math.min(59, r[0] + 4);
     st.s3.push(r);
     st.zcfg.push(st.zcfg[sel.i] ? st.zcfg[sel.i].slice() : null);
     st.zcfgTouched = true;

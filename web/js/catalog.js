@@ -9,6 +9,19 @@ import { api } from './api.js';
 
 const $ = id => document.getElementById(id);
 
+
+// Mission-objective unit types: the engine gives these a special spawn path
+// tied to their own mission (BOWWOWKAPOW's bomb dogs, RONGBROS' hostage…).
+// Dropped into another mission they spawn with no context — often INVISIBLE —
+// while their contact logic still runs (bomb dogs kill you where you walk).
+export const OBJECTIVE_UNITS = {
+  30: 'Pretty — NURSERYCRIMES (mission 13)',
+  35: 'Hostage — RONGBROS (4) / INFLAMMABLECANNIBALS (23)',
+  44: 'Frozen Scientist — SUBZEROHERO (15)',
+  49: 'Bomb Dog — BOWWOWKAPOW (2): invisible elsewhere, still explodes on contact',
+  50: 'Target Dog — TUTORIAL (32)',
+};
+
 export let pending = null;      // {kind:'s6'|'in'|'tr'|'imp', id, label, ...}
 export let onImportModel = null;   // set by main.js -> view3d.importModel
 export function setImportHook(fn) { onImportModel = fn; }
@@ -24,6 +37,11 @@ export function cancel() {
 function arm(kind, id, label, el) {
   document.querySelectorAll('.cat-item.on').forEach(e => e.classList.remove('on'));
   if (pending && pending.kind === kind && pending.id === id) return cancel();
+  if (kind === 's6' && OBJECTIVE_UNITS[id]
+      && !confirm(`"${label}" is a MISSION OBJECTIVE unit (${OBJECTIVE_UNITS[id]}).\n\n`
+        + 'Outside its own mission it usually spawns invisible but keeps its '
+        + 'contact behaviour — bomb dogs in particular kill anyone who walks '
+        + 'over them, with no visible object.\n\nPlace it anyway?')) return;
   pending = { kind, id, label };
   el.classList.add('on');
   $('placebar-txt').textContent = 'Placing: ' + label + ' — click the map';
@@ -100,7 +118,8 @@ export function rebuild() {
   gu.innerHTML = '';
   cat.s6Names.forEach((n, i) => {
     const dat = cat.s6Models && cat.s6Models[i];
-    item(gu, n, 'unit ' + i, 's6', i,
+    const warn = OBJECTIVE_UNITS[i] ? ' ⚠' : '';
+    item(gu, n + warn, (OBJECTIVE_UNITS[i] || '') + ' unit ' + i, 's6', i,
          dat ? TH.globalThumb(String(dat)) : null, (i * 47) % 360);
   });
   // level models

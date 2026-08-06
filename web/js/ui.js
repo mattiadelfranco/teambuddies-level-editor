@@ -359,6 +359,10 @@ function refreshInspector() {
 
   if (sel.k === 's6') {
     const r = st.s6.records[sel.i];
+    if (CAT.OBJECTIVE_UNITS[r[0]])
+      note.textContent = '⚠ mission-objective unit (' + CAT.OBJECTIVE_UNITS[r[0]]
+        + '). Outside its mission it often spawns INVISIBLE while its contact '
+        + 'logic still runs — a frequent cause of "invisible zones that kill you".';
     F.innerHTML = `<div class="row"><label>Type</label><select id="if-type"></select></div>
       <div class="row"><label>Team</label><select id="if-team">${[1, 2, 3, 4]
         .map((n, i) => `<option value="${i}"${r[1] === i ? ' selected' : ''}>team ${n}</option>`).join('')}</select></div>`;
@@ -418,10 +422,14 @@ function refreshInspector() {
       <div class="row"><select id="if-zpre">${Object.keys(ZONE_PRESETS)
         .map(k => `<option>${k}</option>`).join('')}</select>
       <button id="if-zapply">Apply</button></div>
-      <div class="hint">type = area recipe 1–6 (+8/10 special), tgt −30 = infinite</div>
-      <div class="grid"><span></span><span>type</span><span>init</span><span>tgt</span><span>rate</span><span>a</span>
-      <span>slot A</span>${[0, 2, 4, 6, 8].map(k => `<input id="if-zc${k}" type="number" value="${c ? c[k] : ''}">`).join('')}
-      <span>slot B</span>${[1, 3, 5, 7, 9].map(k => `<input id="if-zc${k}" type="number" value="${c ? c[k] : ''}">`).join('')}</div>`;
+      <div class="hint">Two independent drop streams: NORMAL crates and MEGA crates (big
+        model, worth more). One crate every RATE frames, from frame START to frame END
+        (end &lt; 0 = forever), max MAX of this stream's crates on the ground at once
+        (25 frames = 1s). TYPE is not read by the drop scheduler (mission-script data;
+        effect unverified) — timing and amounts live entirely in the other 4 columns.</div>
+      <div class="grid"><span></span><span>type</span><span>start</span><span>end</span><span>rate</span><span>max</span>
+      <span>NORMAL</span>${[0, 2, 4, 6, 8].map(k => `<input id="if-zc${k}" type="number" value="${c ? c[k] : ''}">`).join('')}
+      <span>MEGA</span>${[1, 3, 5, 7, 9].map(k => `<input id="if-zc${k}" type="number" value="${c ? c[k] : ''}">`).join('')}</div>`;
     $('if-zapply').onclick = () => store.apply(s => {
       const v = ZONE_PRESETS[$('if-zpre').value];
       s.ed.zcfg[sel.i] = v ? v.slice() : null;

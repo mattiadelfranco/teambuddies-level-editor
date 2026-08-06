@@ -1,0 +1,93 @@
+INFO  DumpFuncs.java> === 0x80070640 in FUN_8007057c @ 8007057c === (GhidraScript)  
+INFO  DumpFuncs.java> 
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+void FUN_8007057c(uint param_1,int param_2,int param_3)
+
+{
+  uint uVar1;
+  uint uVar2;
+  int iVar3;
+  int *piVar4;
+  int iVar5;
+  int iVar6;
+  int iVar7;
+  uint *puVar8;
+  uint uVar9;
+  
+  if (param_1 != 0) {
+    param_3 = param_3 + param_2 * 0x28;
+    uVar1 = 0;
+    if ((param_1 != 0) && (_DAT_80119c24 != 0)) {
+      do {
+        uVar9 = 0;
+        iVar6 = 0;
+        do {
+          iVar3 = uVar9 * 4;
+          puVar8 = (uint *)(param_3 + 0x18 + iVar3);
+          iVar7 = uVar1 * 0x4c + _DAT_80119c28;
+          *(short *)(iVar7 + iVar6 + 0x26) = (short)*puVar8;
+          *(undefined2 *)(iVar7 + iVar6 + 0x10) = *(undefined2 *)(param_3 + 0x20 + iVar3);
+          iVar5 = *(int *)(param_3 + 0x10 + iVar3);
+          if (iVar5 == 0) {
+            *(undefined2 *)(iVar7 + iVar6 + 0x1e) = 0xffff;
+          }
+          else {
+            uVar2 = *puVar8;
+            if (uVar2 == 0) {
+              trap(7);
+            }
+            *(short *)(iVar7 + iVar6 + 0x1e) =
+                 (short)((uint)(iVar5 - *(int *)(param_3 + 8 + iVar3)) / uVar2);
+          }
+          piVar4 = (int *)(param_3 + 8 + iVar3);
+          iVar5 = uVar1 * 0x4c + _DAT_80119c28;
+          iVar6 = iVar5 + iVar3;
+          *(uint *)(iVar6 + 0x30) = (uint)(*piVar4 == 0);
+          *(int *)(iVar6 + 0x3c) = *piVar4;
+          *(undefined4 *)(iVar6 + 0x44) = *(undefined4 *)(param_3 + 0x10 + iVar3);
+          if (*(int *)(param_3 + iVar3) != 0) {
+            func_0x800e9e58(iVar5,(short)*(int *)(param_3 + iVar3),0);
+          }
+          uVar9 = uVar9 + 1 & 0xffff;
+          iVar6 = uVar9 << 1;
+        } while (uVar9 < 2);
+        uVar1 = uVar1 + 1 & 0xffff;
+      } while ((uVar1 < param_1) && (param_3 = param_3 + 0x28, uVar1 < _DAT_80119c24));
+    }
+  }
+  return;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x800a6a1c in FUN_800a69d0 @ 800a69d0 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+void FUN_800a69d0(void)
+
+{
+  undefined4 uVar1;
+  
+  DAT_800bd14c = (uint)_DAT_8004d8f2;
+  DAT_800bd230 = (uint)_DAT_8004d8f4;
+  DAT_800bd314 = (uint)_DAT_8004d8f6;
+  DAT_800bd3f8 = (uint)_DAT_8004d8f8;
+  FUN_80084214();
+  func_0x800e3458();
+  func_0x800e44c4();
+  FUN_800729d8();
+  func_0x80102ffc();
+  func_0x80106dac();
+  func_0x800e53f0();
+  func_0x800f2324();
+  func_0x800cecbc();
+  FUN_80082ab4();
+  uVar1 = FUN_800abd04(0x10);
+  FUN_80072ed8(uVar1);
+  FUN_800960ec();
+  FUN_800a71dc();
+  return;
+}
+
+ (GhidraScript)  

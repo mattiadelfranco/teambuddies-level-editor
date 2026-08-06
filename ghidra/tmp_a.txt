@@ -1,0 +1,118 @@
+INFO  DumpFuncs.java> === 0x800fdb5c in FUN_800fdb5c @ 800fdb5c === (GhidraScript)  
+INFO  DumpFuncs.java> 
+void FUN_800fdb5c(int param_1)
+
+{
+  bool bVar1;
+  bool bVar2;
+  short sVar3;
+  int iVar4;
+  uint uVar5;
+  int iVar6;
+  int iVar7;
+  int iVar8;
+  
+  iVar8 = (int)*(short *)(param_1 + 0x398);
+  bVar2 = false;
+  if ((*(uint *)(param_1 + 900) & 1) == 0) {
+    if ((*(uint *)(param_1 + 900) & 2) == 0) {
+      iVar4 = *(int *)(param_1 + 0x1a8);
+      iVar6 = (uint)*(ushort *)(param_1 + 0x380) << 0x10;
+      iVar7 = iVar6 >> 0x10;
+      iVar6 = iVar6 >> 0x16;
+      if (*(short *)(iVar4 + 0x138) < iVar6) {
+        iVar6 = -(uint)*(ushort *)(iVar4 + 0x142);
+      }
+      else {
+        if (iVar6 < -(int)*(short *)(iVar4 + 0x13a)) {
+LAB_800fdc70:
+          sVar3 = *(short *)(iVar4 + 0x142);
+          goto LAB_800fdcac;
+        }
+        sVar3 = *(short *)(iVar4 + 0x14e);
+        iVar6 = -(int)sVar3;
+        if ((iVar7 < sVar3) &&
+           (bVar1 = iVar7 <= iVar6, iVar6 = -(uint)*(ushort *)(param_1 + 0x380), bVar1))
+        goto LAB_800fdcac;
+      }
+    }
+    else {
+      iVar6 = (uint)*(ushort *)(param_1 + 0x380) << 0x10;
+      if (iVar6 < 0) {
+        iVar4 = *(int *)(param_1 + 0x1a8);
+        if (iVar6 >> 0x16 <= -(int)*(short *)(iVar4 + 0x13a)) goto LAB_800fdc70;
+        iVar6 = -(uint)*(ushort *)(iVar4 + 0x13c);
+      }
+      else {
+        iVar4 = *(int *)(param_1 + 0x1a8);
+        iVar6 = -(uint)*(ushort *)(iVar4 + 0x142);
+      }
+    }
+  }
+  else {
+    iVar4 = *(int *)(param_1 + 0x1a8);
+    if ((int)((uint)*(ushort *)(param_1 + 0x380) << 0x10) >> 0x16 < (int)*(short *)(iVar4 + 0x138))
+    {
+      sVar3 = *(short *)(iVar4 + 0x13e);
+      goto LAB_800fdcac;
+    }
+    iVar6 = -(uint)*(ushort *)(iVar4 + 0x142);
+  }
+  sVar3 = (short)iVar6;
+LAB_800fdcac:
+  uVar5 = *(uint *)(param_1 + 900);
+  if ((uVar5 & 0x40) == 0) {
+    if ((uVar5 & 0x10) == 0) {
+      if ((uVar5 & 0x20) != 0) {
+        iVar8 = (int)((iVar8 + (uint)*(ushort *)(iVar4 + 0x172)) * 0x10000) >> 0x10;
+        bVar2 = true;
+        if (*(short *)(iVar4 + 0x170) < iVar8) {
+          iVar8 = (int)*(short *)(iVar4 + 0x170);
+        }
+      }
+    }
+    else {
+      iVar8 = (int)((iVar8 - (uint)*(ushort *)(iVar4 + 0x172)) * 0x10000) >> 0x10;
+      bVar2 = true;
+      if (iVar8 < -(int)*(short *)(iVar4 + 0x170)) {
+        iVar8 = (int)-*(short *)(iVar4 + 0x170);
+      }
+    }
+  }
+  if (!bVar2) {
+    if (iVar8 < 1) {
+      iVar8 = (int)((iVar8 + (uint)*(ushort *)(iVar4 + 0x174)) * 0x10000) >> 0x10;
+      if (0 < iVar8) {
+        iVar8 = 0;
+      }
+    }
+    else {
+      iVar8 = (int)((iVar8 - (uint)*(ushort *)(iVar4 + 0x174)) * 0x10000) >> 0x10;
+      if (iVar8 < 0) {
+        iVar8 = 0;
+      }
+    }
+  }
+  *(short *)(param_1 + 0x30c) = sVar3;
+  *(short *)(param_1 + 0x30e) = sVar3;
+  *(short *)(param_1 + 0x310) = sVar3;
+  *(short *)(param_1 + 0x312) = sVar3;
+  FUN_800fddd0(param_1);
+  *(short *)(param_1 + 0x23e) = (short)((uint)(iVar8 * 0xc9) >> 5);
+  *(short *)(param_1 + 0x398) = (short)iVar8;
+  return;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x800fba30 in FUN_800fba30 @ 800fba30 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+int FUN_800fba30(int param_1)
+
+{
+  FUN_800f75a8();
+  *(undefined **)(param_1 + 4) = &DAT_800c6c24;
+  return param_1;
+}
+
+ (GhidraScript)  
+INFO  REPORT: Save succeeded for processed file: /GAME.BIN (HeadlessAnalyzer)  
