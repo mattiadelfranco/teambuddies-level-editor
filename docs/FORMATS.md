@@ -241,6 +241,23 @@ Note the clut index goes well past 120 on the biggest levels (COUNTRYVILE uses
 
 ---
 
+## Crate recipes (BIND 0953)
+
+Member layout: ten config files (TOYS, POWERUP, PROJECTILES, WEAPONS, VEHICLES,
+ACTION, PERCEPT, ATTITUDE, BUDDIES, STATICS), then 41 `N_CRATECONTENTS.BIN`
+(28 bytes: `u32 6` + six `u16` pairs normal/mega in the 180-toy space), then
+25 `N_BT_*.BIN` label files.
+
+Recipes are **per mission**, not per world: `FUN_80083304` (ENG) is called with
+`a0 = _DAT_8004d8ce` (the mission index) and picks BIND member `mission + 10`
+— and the CRATECONTENTS files start exactly at member 10, so **mission M uses
+`M_CRATECONTENTS.BIN`**. `_DAT_8004d8d4` overrides the index when it is not -1
+(written by ENG `0x800a5368` and GAME `0x800f14b0`). The `N_BT_*.BIN` names
+(PARK_AREA, JUNGLE_AREA, ALL_FLAME_WEAPONS…) are just labels on some of the
+indices — they do **not** group missions.
+
+---
+
 ## LOD — 3D models (MDL.BND)
 
 Each level's `MDL.BND` is a BIND of `*.LOD` model files (validated on all 121

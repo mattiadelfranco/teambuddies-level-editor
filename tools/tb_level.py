@@ -459,14 +459,21 @@ def catalogs():
     tab = 4 + nrec * 0x80
     n1, n2 = struct.unpack_from("<II", lv, tab)
     t3 = tab + 12 + n1 * 28 + n2 * 4
-    zcfg, mset = {}, {}
+    zcfg, mset, f68 = {}, {}, {}
     for m in range(nrec):
         r = 4 + m * 0x80
         zc, zs = struct.unpack_from("<II", lv, r + 0x74)
         zcfg[m] = [list(struct.unpack_from("<4I2i4I", lv, t3 + (zs + k) * 40))
                    for k in range(min(zc, 16))]
-        mset[m] = struct.unpack_from("<I", lv, r + 0x68)[0]
-    out["zcfg"], out["mset"] = zcfg, mset
+        # CRATE RECIPES ARE PER MISSION: the loader (FUN_80083304, ENG) gets
+        # a0 = _DAT_8004d8ce (mission index) and reads BIND member
+        # (mission + 10); the CRATECONTENTS files start at member 10, so
+        # mission M uses M_CRATECONTENTS.BIN. The +0x68 field of the record is
+        # something else (it indexes the internal tbl1). _DAT_8004d8d4
+        # overrides the set when != -1 (ENG 0x800a5368 / GAME 0x800f14b0).
+        mset[m] = m
+        f68[m] = struct.unpack_from("<I", lv, r + 0x68)[0]
+    out["zcfg"], out["mset"], out["levelsField68"] = zcfg, mset, f68
 
     # crate recipe sets (BIND 0953, modded files override)
     c53m = os.path.join(MODS, "0953")
