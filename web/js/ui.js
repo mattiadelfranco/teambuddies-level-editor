@@ -331,7 +331,30 @@ function renderRecipes() {
   const ms = Object.keys(store.cat.mset).filter(m => store.cat.mset[m] === store.rec.set)
     .map(m => '0' + (512 + +m));
   $('lv-ruse').textContent = ms.length ? 'used by levels: ' + ms.join(', ')
-    : 'no campaign mission uses this set';
+    : 'no mission uses this set — editing it changes nothing in game';
+  // guard: a set that THIS level does not use has no effect on what you test
+  const own = store.cat.mset[store.mission()];
+  const warn = $('lv-rwarn');
+  if (own !== undefined && own !== store.rec.set) {
+    const oname = store.cat.recipes[own] && store.cat.recipes[own].name;
+    warn.style.display = '';
+    warn.style.color = '#ff8f8f';
+    warn.innerHTML = `⚠ <b>${store.lvl.name} uses set ${own}${oname ? ' (' + oname + ')' : ''}</b>, `
+      + `not set ${store.rec.set}. Edits here will NOT show up in this level.`;
+    const b = document.createElement('button');
+    b.textContent = `switch to set ${own}`;
+    b.style.marginTop = '4px';
+    b.onclick = () => {
+      if (store.rec.touched
+          && !confirm(`Discard unsaved edits to set ${store.rec.set}?`)) return;
+      store.loadRecipeSet(own);
+    };
+    warn.appendChild(document.createElement('br'));
+    warn.appendChild(b);
+  } else {
+    warn.style.display = 'none';
+    warn.textContent = '';
+  }
 }
 
 // ---- inspector ----
