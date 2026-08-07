@@ -10,6 +10,9 @@ ghidra/proj/
 ghidra/proj_psxldr/
 ghidra/psx_ldr.zip
 
+# ---- decompilation work: separate git repository (see docs/DECOMP_PLAN.md) ----
+decomp/
+
 # ---- local junk ----
 __pycache__/
 *.pyc

@@ -1,0 +1,57 @@
+INFO  DumpFuncs.java> === 0x80078f20 in FUN_80078f20 @ 80078f20 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+undefined4 FUN_80078f20(int param_1,int param_2)
+
+{
+  int iVar1;
+  
+  if (param_2 != param_1) {
+    iVar1 = FUN_800749c4(param_1 + 0x88);
+    if (iVar1 != 0xffff) {
+      *(int *)(param_1 + iVar1 * 4 + 0x68) = param_2;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x80079004 in FUN_80079004 @ 80079004 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+bool FUN_80079004(int param_1,undefined4 param_2)
+
+{
+  int iVar1;
+  
+  iVar1 = FUN_800749c4(param_1 + 0xc0);
+  if (iVar1 != 0xffff) {
+    *(undefined4 *)(param_1 + iVar1 * 4 + 0xa0) = param_2;
+  }
+  return iVar1 != 0xffff;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x80078f7c in FUN_80078f7c @ 80078f7c === (GhidraScript)  
+INFO  DumpFuncs.java> 
+undefined4 FUN_80078f7c(int param_1,int param_2)
+
+{
+  int *piVar1;
+  uint uVar2;
+  
+  uVar2 = *(uint *)(param_1 + 0x90);
+  if (uVar2 != 0xffff) {
+    do {
+      piVar1 = (int *)(param_1 + 0x68 + uVar2 * 4);
+      if (*piVar1 == param_2) {
+        *piVar1 = 0;
+        FUN_80074a34(param_1 + 0x88,uVar2);
+        return 1;
+      }
+      uVar2 = (uint)*(ushort *)(uVar2 * 2 + *(int *)(param_1 + 0x94));
+    } while (uVar2 != 0xffff);
+  }
+  return 0;
+}
+
+ (GhidraScript)  

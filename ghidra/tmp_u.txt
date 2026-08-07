@@ -1,0 +1,123 @@
+INFO  DumpFuncs.java> === 0x8006f6b0 in FUN_8006f5e4 @ 8006f5e4 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+void FUN_8006f5e4(void)
+
+{
+  short sVar1;
+  ushort uVar2;
+  undefined2 uVar3;
+  short *psVar4;
+  uint uVar5;
+  uint uVar6;
+  int iVar7;
+  undefined4 uVar8;
+  uint uVar9;
+  uint uVar10;
+  undefined4 *puVar11;
+  int iVar12;
+  uint uVar13;
+  ushort *puVar14;
+  ushort *local_30;
+  
+  psVar4 = (short *)FUN_800abd04(0x18);
+  uVar6 = DAT_800c04b0;
+  sVar1 = *psVar4;
+  puVar14 = (ushort *)(psVar4 + 1);
+  uVar9 = (uint)*puVar14;
+  uVar5 = uVar9 + 4;
+  if (_DAT_8004d8ce == 0x16) {
+    DAT_800c04b8 = uVar9 + 7;
+    uVar9 = uVar5;
+    if (uVar5 < DAT_800c04b8) {
+      do {
+        FUN_80078f20(&DAT_800bd14c + uVar9 * 0x39,&DAT_800bd14c);
+        uVar13 = uVar9 + 1;
+        if (uVar5 < DAT_800c04b8) {
+          puVar11 = &DAT_800bd14c + uVar5 * 0x39;
+          uVar10 = uVar5;
+          do {
+            if (uVar9 != uVar10) {
+              FUN_80079004(&DAT_800bd14c + uVar9 * 0x39,puVar11);
+            }
+            uVar10 = uVar10 + 1;
+            puVar11 = puVar11 + 0x39;
+          } while (uVar10 < DAT_800c04b8);
+        }
+        uVar9 = uVar13;
+      } while (uVar13 < DAT_800c04b8);
+    }
+  }
+  else if (_DAT_8004d8ce == 0xe) {
+    DAT_800c04b8 = uVar9 + 5;
+    FUN_80078f20(&DAT_800bd068 + DAT_800c04b8 * 0xe4,&DAT_800bd14c);
+  }
+  else {
+    DAT_800c04b8 = uVar5;
+    if (_DAT_8004d8ce == 0x1e) {
+      func_0x800f23f4(0x51,0x80118c84);
+    }
+  }
+  local_30 = (ushort *)(psVar4 + 2);
+  uVar9 = 0;
+  uVar5 = DAT_800c04b8;
+  if (*puVar14 != 0) {
+    do {
+      uVar5 = 0;
+      if (uVar6 != 0) {
+        do {
+          FUN_80078f20(&DAT_800bd4dc + uVar9 * 0xe4,&DAT_800bd14c + uVar5 * 0x39);
+          uVar5 = uVar5 + 1 & 0xff;
+        } while (uVar5 < uVar6);
+      }
+      (&DAT_800bd180)[(uVar9 + 4) * 0x39] = uVar9 + 4;
+      uVar9 = uVar9 + 1 & 0xff;
+      uVar5 = DAT_800c04b8;
+    } while (uVar9 < *puVar14);
+  }
+  do {
+    sVar1 = sVar1 + -1;
+    DAT_800c04b8 = uVar5;
+    if (sVar1 == -1) {
+      if (_DAT_8004d8ce == 0x16) {
+        (&DAT_800bd180)[(uVar5 - 3) * 0x39] = uVar5 - 3;
+        (&DAT_800bd180)[(uVar5 - 2) * 0x39] = uVar5 - 2;
+        (&DAT_800bd180)[(uVar5 - 1) * 0x39] = uVar5 - 1;
+        FUN_80078b4c(&DAT_800bcea0 + uVar5 * 0xe4,0x80118c7c);
+        FUN_80078b4c(&DAT_800bcf84 + DAT_800c04b8 * 0xe4,0x80118c7c);
+        FUN_80078b4c(&DAT_800bd068 + DAT_800c04b8 * 0xe4,0x80118c7c);
+        iVar12 = DAT_800c04b8 * 0xe4;
+        *(undefined4 *)(&DAT_800bcea0 + iVar12) = 0;
+--
+INFO  DumpFuncs.java> === 0x80071354 in FUN_800712a4 @ 800712a4 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+void FUN_800712a4(void)
+
+{
+  int iVar1;
+  uint uVar2;
+  uint uVar3;
+  
+  uVar3 = 0;
+  if (DAT_800c04b0 != 0) {
+    iVar1 = 0;
+    do {
+      iVar1 = iVar1 * 8 + uVar3 * -7;
+      if ((((&DAT_800bd1d8)[iVar1] == 0) && ((&DAT_800bd210)[iVar1] == 0)) &&
+         (uVar2 = 0, DAT_800c04b0 != 0)) {
+        do {
+          if (uVar3 != uVar2) {
+            FUN_80078f20(&DAT_800bd14c + iVar1,&DAT_800bd14c + uVar2 * 0x39);
+          }
+          uVar2 = uVar2 + 1 & 0xffff;
+        } while (uVar2 < DAT_800c04b0);
+      }
+      uVar3 = uVar3 + 1 & 0xffff;
+      iVar1 = uVar3 << 3;
+    } while (uVar3 < DAT_800c04b0);
+  }
+  return;
+}
+
+ (GhidraScript)  

@@ -1,0 +1,151 @@
+INFO  DumpFuncs.java> === 0x80070064 in FUN_8006fda8 @ 8006fda8 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+void FUN_8006fda8(void)
+
+{
+  int *piVar1;
+  uint uVar2;
+  uint uVar3;
+  int iVar4;
+  int *piVar5;
+  int iVar6;
+  int iVar7;
+  ushort local_38 [8];
+  int *local_28 [2];
+  
+  _DAT_801197f8 = _DAT_8004d8dc;
+  func_0x8003d754(1);
+  piVar1 = (int *)func_0x8003d234((_DAT_8004d8d8 + 0x22f) * 0x10000 >> 0x10,1);
+  func_0x8003d084();
+  if (0 < *piVar1) {
+    uVar2 = 1;
+    do {
+      uVar3 = uVar2 & 0xffff;
+      uVar2 = uVar3 + 1;
+    } while ((int)uVar3 < *piVar1);
+  }
+  if ((_DAT_8004d8da == 4) || (_DAT_8004d8ce == 4)) {
+    func_0x800ea898();
+  }
+  iVar4 = 0;
+  iVar7 = 0;
+  piVar5 = piVar1 + 4;
+  iVar6 = (int)(short)piVar1[10];
+  uVar2 = (int)(short)piVar1[6] + (int)*(short *)((int)piVar1 + 0x1a);
+  if ((*(short *)((int)piVar1 + 0x1a) == 0) && (_DAT_8004d8ca != 0)) {
+    uVar2 = (int)(short)piVar1[6] + 1;
+    iVar4 = 3;
+    *(short *)(piVar1 + 5) = (short)piVar1[5] + 1;
+    *(short *)((int)piVar1 + 0x16) = *(short *)((int)piVar1 + 0x16) + 1;
+  }
+  if ((0 < piVar1[0xb]) || ((_DAT_8004d8e4 == 0 && (0 < _DAT_8004d8ea)))) {
+    uVar2 = uVar2 + 1;
+    iVar4 = iVar4 + 3;
+    *(short *)(piVar1 + 5) = (short)piVar1[5] + 1;
+    *(short *)((int)piVar1 + 0x16) = *(short *)((int)piVar1 + 0x16) + 1;
+  }
+  FUN_80074870(iVar6 + iVar4);
+  func_0x800ebe88((short)piVar1[5]);
+  if ((short)piVar1[5] != 0) {
+    func_0x800ebde8((short)piVar1[5]);
+  }
+  func_0x800eba50(*(undefined2 *)((int)piVar1 + 0x16));
+  if (*(short *)((int)piVar1 + 0x16) != 0) {
+    func_0x800eb9c8(*(undefined2 *)((int)piVar1 + 0x16));
+  }
+  func_0x800ed5a0((short)*piVar5);
+  if ((short)*piVar5 != 0) {
+    func_0x800ed500((short)*piVar5);
+  }
+  func_0x800f0000(uVar2 & 0xffff);
+  if (uVar2 != 0) {
+    func_0x800eff40(uVar2 & 0xffff);
+  }
+  FUN_80096c94(*(undefined2 *)((int)piVar1 + 0x22));
+  if (*(short *)((int)piVar1 + 0x22) != 0) {
+    FUN_80096be8(*(undefined2 *)((int)piVar1 + 0x22));
+  }
+  FUN_800842b8((int)*(short *)((int)piVar1 + 0x26));
+  uVar2 = 0;
+  local_28[0] = piVar1 + 0xe;
+  if (0 < *(short *)((int)piVar1 + 0x2a)) {
+    do {
+      uVar3 = uVar2 + 1 & 0xffff;
+      *(int *)(local_38 + uVar2 * 2) = *local_28[0];
+      local_28[0] = local_28[0] + 1;
+      uVar2 = uVar3;
+    } while ((int)uVar3 < (int)*(short *)((int)piVar1 + 0x2a));
+  }
+  while (iVar6 = iVar6 + -1, iVar6 != -1) {
+    switch(*local_28[0]) {
+    case 1:
+      FUN_80071830(local_28);
+      break;
+    case 2:
+      FUN_80071920(local_28);
+      break;
+    case 3:
+      FUN_80071984(local_28);
+      break;
+    case 4:
+      FUN_80071a94(local_28);
+      break;
+    case 7:
+      FUN_80071aec(local_28);
+      break;
+    case 8:
+      FUN_80071c8c(local_28);
+      break;
+    case 9:
+      FUN_80071efc(local_28);
+      break;
+    case 10:
+      FUN_8007206c(local_28);
+      break;
+    case 0xb:
+      FUN_800720b8(local_28);
+      break;
+    case 0xc:
+      FUN_800721ec(local_28);
+      break;
+    case 0xe:
+    case 0xf:
+      iVar7 = iVar7 + 1;
+    case 5:
+    case 6:
+    case 0xd:
+      FUN_80071c04(local_28);
+    }
+  }
+  FUN_800712a4();
+  _DAT_8004d8ec = 0;
+  if ((*(short *)((int)piVar1 + 0x1a) == 0) && (_DAT_8004d8ca != 0)) {
+    if (iVar7 == 0) {
+      func_0x800f1838();
+      goto LAB_80070178;
+    }
+  }
+  else if (iVar7 == 0) goto LAB_80070178;
+  _DAT_8004d8ec = 1;
+LAB_80070178:
+  if ((piVar1[0xb] < 1) && ((_DAT_8004d8e4 != 0 || (_DAT_8004d8ea < 1)))) {
+    _DAT_8004d8e8 = 0xffff;
+    _DAT_8004d8ea = -1;
+  }
+  else {
+    func_0x800f18f4(piVar5,iVar7);
+  }
+  uVar2 = 0;
+  if (0 < *(short *)((int)piVar1 + 0x2a)) {
+    iVar7 = 0;
+    do {
+      FUN_80072788(_DAT_8011a378 + (uint)*(ushort *)((int)local_38 + iVar7) * 0x18);
+      uVar2 = uVar2 + 1 & 0xffff;
+      iVar7 = uVar2 << 2;
+    } while ((int)uVar2 < (int)*(short *)((int)piVar1 + 0x2a));
+  }
+  func_0x800eba78();
+  func_0x8003d7b4(1);
+  if ((short)piVar1[0xc] < 0) {

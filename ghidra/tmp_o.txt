@@ -1,0 +1,212 @@
+INFO  DumpFuncs.java> === 0x80071920 in FUN_80071920 @ 80071920 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+void FUN_80071920(int *param_1)
+
+{
+  int iVar1;
+  
+  iVar1 = *param_1;
+  *param_1 = iVar1 + 4;
+  if ((_DAT_8004d8da != 0) && (_DAT_8004d8da != 2)) {
+    *param_1 = iVar1 + 0x10;
+    return;
+  }
+  *(undefined2 *)(*(int *)(&DAT_80119b00 + *(int *)(iVar1 + 4) * 4) + 0x60) =
+       *(undefined2 *)(iVar1 + 8);
+  *param_1 = iVar1 + 0x10;
+  return;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x80071984 in FUN_80071984 @ 80071984 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+void FUN_80071984(int *param_1,undefined4 param_2,int param_3)
+
+{
+  int iVar1;
+  undefined4 uVar2;
+  int iVar3;
+  
+  iVar1 = *param_1;
+  iVar3 = iVar1 + 4;
+  *param_1 = iVar3;
+  switch(*(undefined4 *)(iVar1 + 8)) {
+  case 1:
+  case 2:
+  case 3:
+  case 4:
+  case 6:
+    uVar2 = func_0x800ebbc0();
+    param_3 = func_0x800ed098(uVar2,iVar3);
+    break;
+  case 0xffffffff:
+  case 0:
+  case 5:
+  case 7:
+  case 8:
+    uVar2 = func_0x800ebbc0();
+    param_3 = func_0x800ec1c4(uVar2,iVar3);
+  }
+  (**(code **)(*(int *)(param_3 + 0xa0) + 0xc))
+            (param_3 + *(short *)(*(int *)(param_3 + 0xa0) + 8),iVar3);
+  iVar3 = iVar3 + *(int *)(iVar1 + 0x10) * 8 + 0x2c + *(int *)(iVar1 + 0x18) * 0x10 +
+          *(int *)(iVar1 + 0x24) * 8 + *(int *)(iVar1 + 0x2c) * 4;
+  *param_1 = iVar3;
+  if (*(int *)(iVar1 + 0x14) != -1) {
+    iVar3 = iVar3 + *(int *)(iVar1 + 0x14) * 8;
+  }
+  *param_1 = iVar3;
+  return;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x80071a94 in FUN_80071a94 @ 80071a94 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+void FUN_80071a94(int *param_1)
+
+{
+  undefined4 uVar1;
+  int iVar2;
+  int iVar3;
+  
+  iVar2 = *param_1;
+  iVar3 = iVar2 + 4;
+  *param_1 = iVar3;
+  uVar1 = func_0x800eb8c0();
+  FUN_80072464(uVar1,iVar3);
+  *param_1 = iVar2 + 0x14;
+  return;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x80071aec in FUN_80071aec @ 80071aec === (GhidraScript)  
+INFO  DumpFuncs.java> 
+void FUN_80071aec(int *param_1)
+
+{
+  int iVar1;
+  int iVar2;
+  int iVar3;
+  int iVar4;
+  undefined4 *puVar5;
+  int iVar6;
+  uint uVar7;
+  short local_28;
+  undefined2 local_26;
+  short local_24;
+  
+  iVar1 = *param_1;
+  uVar7 = 0;
+  *param_1 = iVar1 + 4;
+  puVar5 = (undefined4 *)(iVar1 + 8);
+  if (0 < *(int *)(iVar1 + 4)) {
+    do {
+      local_28 = (short)*puVar5 * 0x100 + -0x4000;
+      local_24 = (short)puVar5[1] * -0x100 + 0x4000;
+      iVar2 = puVar5[2];
+      iVar6 = puVar5[3];
+      puVar5 = puVar5 + 4;
+      local_26 = FUN_800ab6b0(&local_28);
+      iVar3 = iVar6 << 6;
+      if (0x1000 < iVar3) {
+        iVar3 = 0x1000;
+      }
+      iVar4 = 0;
+      if ((iVar2 << 8 & 0xffffU) == 0) {
+        iVar4 = iVar6 * 10;
+      }
+      FUN_800ac1f0(&local_28,iVar2 << 8 & 0xffff,iVar3,iVar4);
+      uVar7 = uVar7 + 1 & 0xffff;
+    } while ((int)uVar7 < *(int *)(iVar1 + 4));
+  }
+  *param_1 = (int)puVar5;
+  return;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x80071c04 in FUN_80071c04 @ 80071c04 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+void FUN_80071c04(int *param_1)
+
+{
+  undefined4 uVar1;
+  int iVar2;
+  int iVar3;
+  
+  uVar1 = func_0x800efe20();
+  func_0x800f06f0(uVar1,*param_1);
+  iVar2 = *param_1;
+  iVar3 = iVar2 + 0x10;
+  *param_1 = iVar2 + 4;
+  if (*(char *)(iVar2 + 5) != -1) {
+    iVar3 = iVar3 + *(char *)(iVar2 + 5) * 4;
+  }
+  *param_1 = iVar3 + *(char *)(iVar2 + 4) * 4 + *(char *)(iVar2 + 6) * 4 + *(int *)(iVar2 + 0xc) * 4
+  ;
+  return;
+}
+
+ (GhidraScript)  
+INFO  DumpFuncs.java> === 0x80071c8c in FUN_80071c8c @ 80071c8c === (GhidraScript)  
+INFO  DumpFuncs.java> 
+void FUN_80071c8c(int *param_1)
+
+{
+  int iVar1;
+  int iVar2;
+  undefined4 uVar3;
+  int iVar4;
+  int iVar5;
+  int iVar6;
+  int iVar7;
+  uint uVar8;
+  undefined4 *puVar9;
+  int *piVar10;
+  uint uVar11;
+  
+  iVar7 = *param_1;
+  piVar10 = (int *)(iVar7 + 4);
+  *param_1 = (int)piVar10;
+  uVar11 = *(uint *)(iVar7 + 0xc);
+  if ((*(uint *)(iVar7 + 0x10) & 1) != 0) {
+    uVar11 = (uVar11 - 1) + DAT_800c04b0;
+  }
+  iVar5 = *(int *)(iVar7 + 0xc);
+  *param_1 = iVar7 + 0x1c;
+  iVar1 = iVar5 * 0xe4;
+  puVar9 = &DAT_800bd14c + iVar5 * 0x39;
+  if (DAT_800c04b0 <= uVar11) {
+    uVar8 = DAT_800c04b0 & 0xffff;
+    while (uVar8 = uVar8 - 1 & 0xffff, uVar8 != 0xffff) {
+      FUN_80078f7c(puVar9,&DAT_800bd14c + uVar8 * 0x39);
+    }
+  }
+  uVar8 = 0;
+  if (0 < *piVar10) {
+    do {
+      FUN_80078f20(puVar9,&DAT_800bd14c + *(int *)*param_1 * 0x39);
+      *param_1 = *param_1 + 4;
+      uVar8 = uVar8 + 1 & 0xffff;
+    } while ((int)uVar8 < *piVar10);
+  }
+  uVar8 = 0;
+  if (0 < *(int *)(iVar7 + 8)) {
+    do {
+      FUN_80079004(puVar9,&DAT_800bd14c + *(int *)*param_1 * 0x39);
+      *param_1 = *param_1 + 4;
+      uVar8 = uVar8 + 1 & 0xffff;
+    } while ((int)uVar8 < *(int *)(iVar7 + 8));
+  }
+  if (uVar11 < DAT_800c04b0) {
+    iVar2 = FUN_80079e54(puVar9);
+    if (iVar2 != 0) {
+      iVar6 = *(int *)(iVar7 + 0x10);
+      iVar4 = iVar6;
+      if (iVar6 < 0) {
+        iVar4 = -iVar6;
+      }
+      if (iVar4 != 0x168) {
+        *(uint *)(*(int *)(*(int *)(iVar2 + 0x264) + 4) + 0x3c) = iVar6 >> 9 & 7;
+      }

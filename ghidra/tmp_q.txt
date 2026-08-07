@@ -1,0 +1,14 @@
+INFO  DumpFuncs.java> === 0x80071efc in FUN_80071efc @ 80071efc === (GhidraScript)  
+  *param_1 = iVar11 + 8;
+  *param_1 = iVar11 + 0xc;
+  *param_1 = iVar11 + 0x10;
+INFO  DumpFuncs.java> === 0x8007206c in FUN_8007206c @ 8007206c === (GhidraScript)  
+  *param_1 = *param_1 + 4;
+  *param_1 = *param_1 + 0x20;
+INFO  DumpFuncs.java> === 0x800720b8 in FUN_800720b8 @ 800720b8 === (GhidraScript)  
+  iVar3 = *param_1;
+  *param_1 = (int)piVar6;
+  *param_1 = *param_1 + 0x10;
+INFO  DumpFuncs.java> === 0x800721ec in FUN_800721ec @ 800721ec === (GhidraScript)  
+  iVar2 = *param_1;
+  *param_1 = iVar2 + *(short *)(iVar2 + 6) * 8 + 0xc + *(int *)(iVar2 + 8) * 4;

@@ -1,0 +1,23 @@
+INFO  DumpFuncs.java> === 0x8003d234 in FUN_8003d234 @ 8003d234 === (GhidraScript)  
+INFO  DumpFuncs.java> 
+undefined4 FUN_8003d234(short param_1,undefined1 param_2)
+
+{
+  int iVar1;
+  int iVar2;
+  undefined1 auStack_20 [8];
+  
+  FUN_8003d084();
+  iVar1 = param_1 * 8;
+  DAT_80049194 = *(uint *)(&DAT_800450e8 + iVar1);
+  iVar2 = *(int *)(&DAT_800450e4 + iVar1);
+  iVar1 = func_0x80023d98(&DAT_80049230);
+  func_0x80023e18(iVar1 + iVar2,auStack_20);
+  DAT_80049194 = DAT_80049194 + 3 & 0xfffffffc;
+  DAT_80049248 = FUN_8003d44c(DAT_80049194,param_2,(&PTR_DAT_80043d10)[param_1]);
+  DAT_80049218 = 1;
+  func_0x8001aadc(auStack_20,DAT_80049248,DAT_80049194);
+  return DAT_80049248;
+}
+
+ (GhidraScript)  
