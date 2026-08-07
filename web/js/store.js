@@ -67,6 +67,8 @@ export const store = {
       tiles: ed.tiles.slice(), tilesTouched: ed.tilesTouched,
       pth: ed.pth ? ed.pth.slice() : null, pthTouched: ed.pthTouched,
       addModels: ed.addModels.map(m => ({ ...m })),
+      mrel: ed.mrel ? JSON.parse(JSON.stringify(ed.mrel)) : null,
+      mfields: (ed.mfields || []).map(f => ({ ...f })),
       rec: { set: this.rec.set, pairs: this.rec.pairs.map(p => p.slice()), touched: this.rec.touched },
       sel: this.sel ? { ...this.sel } : null, dirty: this.dirty,
       entry: this.entry,
@@ -93,6 +95,8 @@ export const store = {
       ed.pth.set(s.pth); ed.pthTouched = s.pthTouched;
     }
     ed.addModels = s.addModels.map(m => ({ ...m }));
+    ed.mrel = s.mrel ? JSON.parse(JSON.stringify(s.mrel)) : null;
+    ed.mfields = (s.mfields || []).map(f => ({ ...f }));
     this.lvl.models = this.lvl.models.slice(0, ed.baseModelCount)
       .concat(ed.addModels.map(m => m.name));
     this.rec = { set: s.rec.set, pairs: s.rec.pairs.map(p => p.slice()), touched: s.rec.touched };
@@ -181,9 +185,17 @@ export const store = {
         pthTouched: false,
         addModels: [],                    // models imported from other levels
         baseModelCount: this.lvl.models.length,
+        mrel: null,                       // alleanze modificate (null = intatte)
+        mfields: [],                      // patch campi mission script
       };
     }
     this.ed = this.edits[entry];
+    if (this.ed.mrel === undefined) { this.ed.mrel = null; this.ed.mfields = []; }
+    // mission script (alleanze + record): dati di sola visualizzazione
+    this.msn = null;
+    api.mission(entry).then(m => {
+      if (this.entry === entry) { this.msn = m; this.emit('mission'); }
+    }).catch(() => {});
     // unsaved imports survive a level round-trip: re-extend the model list
     for (const m of this.ed.addModels)
       if (!this.lvl.models.some(n => (n || '').toUpperCase() === m.name.toUpperCase()))
@@ -223,6 +235,8 @@ export const store = {
     if (ed.tilesTouched) edits.tiles = u8b64(ed.tiles);
     if (ed.pthTouched && ed.pth) edits.pth = u8b64(ed.pth);
     if (ed.addModels.length) edits.addModels = ed.addModels;
+    if (ed.mrel) edits.relations = ed.mrel;
+    if (ed.mfields && ed.mfields.length) edits.missionFields = ed.mfields;
     const r = await api.save(this.entry, edits);
     if (r.ok) {
       this.dirty = false;
@@ -230,6 +244,15 @@ export const store = {
       ed.hmTouched = false;
       ed.tilesTouched = false;
       ed.pthTouched = false;
+      if (r.mission) {
+        ed.mrel = null;
+        ed.mfields = [];
+        const entry = this.entry;
+        api.mission(entry).then(m => {
+          if (this.entry === entry) { this.msn = m; this.emit('mission'); }
+        }).catch(() => {});
+        if (r.mission.cresciuto) this.say('⚠ ' + r.mission.nota);
+      }
       this.say('✓ saved to mods/' + this.entry + (r.recipes ? ' (+recipe set ' + r.recipes.set + ')' : ''));
       // reload from disk so the baseline matches what was written
       this.lvl = await api.level(this.entry);

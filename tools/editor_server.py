@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tb_lod
 import tb_level
 import tb_fastiso
+import tb_mission
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIND = os.path.join(ROOT, "teambudd/dat_estratto/bind")
@@ -390,6 +391,62 @@ def apply_teams(mission, n):
             d2[off] = n
     open(p2, "wb").write(d2)
     return {"ok": True, "missione": mission, "team": n}
+
+
+def _mission_teams(mission):
+    """Numero di squadre della missione (0956, mod se presente)."""
+    p = os.path.join(MODS, "0956.bin")
+    if not os.path.exists(p):
+        p = os.path.join(RAW, "0956.bin")
+    d = open(p, "rb").read()
+    return struct.unpack_from("<I", d, 8 + mission * 8)[0]
+
+
+def api_mission(mission):
+    """Script della missione per il pannello: record decodificati + relazioni."""
+    ms = tb_mission.load(mission)
+    n = max(_mission_teams(mission), 2)
+    return {"mission": mission, "entry": tb_mission.ENTRY_BASE + tb_mission.slot_of(mission),
+            "teams": n,
+            "relations": tb_mission.get_relations(ms, n),
+            "records": [tb_mission.decode_record(r) for r in ms["records"]],
+            "indices": ms["indices"]}
+
+
+def apply_mission(mission, relations=None, fields=None):
+    """Applica al mission script: relations = {team: {nemici, alleati}},
+    fields = [{rec, off, val}] (patch dei campi u32 dei record; i campi che
+    guidano il walker sono protetti dal check di lunghezza)."""
+    ms = tb_mission.load(mission)
+    if fields:
+        for f in fields:
+            i, off, val = int(f["rec"]), int(f["off"]), int(f["val"])
+            if not 0 <= i < len(ms["records"]):
+                raise ValueError(f"missione: record {i} inesistente")
+            d = bytearray(ms["records"][i]["data"])
+            if not (4 <= off <= len(d) - 4):
+                raise ValueError(f"missione: offset {off} fuori dal record {i}")
+            struct.pack_into("<i", d, off, val)
+            if tb_mission.record_size(bytes(d), 0) != len(d):
+                raise ValueError(
+                    f"missione: il campo a +{off:#x} del record {i} ne cambia "
+                    "la lunghezza (contatore): non modificabile da qui")
+            ms["records"][i]["data"] = bytes(d)
+    if relations:
+        n = max(_mission_teams(mission), 2)
+        rel = {int(t): {"nemici": [int(v) for v in c.get("nemici", []) if 0 <= int(v) < n],
+                        "alleati": [int(v) for v in c.get("alleati", []) if 0 <= int(v) < n]}
+               for t, c in relations.items() if 0 <= int(t) < n}
+        tb_mission.set_relations(ms, rel)
+    out = tb_mission.serialize(ms)
+    tb_mission.parse(out)                          # sanity: stream ricamminabile
+    tb_mission.save(mission, ms)
+    grew = len(out) > tb_mission._res(mission)[1]
+    return {"ok": True, "missione": mission, "size": len(out),
+            "cresciuto": grew,
+            "nota": ("script più lungo dell'originale: la tabella risorse viene "
+                     "aggiornata alla build (serve riavvio completo dell'emulatore)"
+                     if grew else "")}
 
 
 def apply_edits(entry, edits):
@@ -1000,6 +1057,11 @@ def build_iso():
     log.append(r.stdout.strip() or r.stderr.strip())
     if r.returncode != 0:
         return {"ok": False, "log": log}
+    grown = tb_mission.sync_restable()
+    if grown:
+        log.append(f"⚠ script missione più lunghi dell'originale ({grown}): "
+                   "tabella risorse aggiornata in SYS.BIN/OVERLAY.DAT — "
+                   "RIAVVIA l'emulatore da zero (niente savestate)")
     base = DAT_DEV if os.path.exists(DAT_DEV) else DAT_ORIG
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools/tb_rebuild.py"),
                         base, MODS, DAT, MANIFEST],
@@ -1019,7 +1081,7 @@ def build_iso():
     if os.path.exists(ISO_BIN):
         try:
             n = 0
-            for name in ("BUDDIES.DAT", "ENG.BIN", "GAME.BIN"):
+            for name in ("BUDDIES.DAT", "ENG.BIN", "GAME.BIN", "SYS.BIN"):
                 p = DAT if name == "BUDDIES.DAT" else os.path.join(ESTRATTO, name)
                 n += tb_fastiso.patch_file(ISO_BIN, name, open(p, "rb").read())
             log.append(f"⚡ ISO aggiornata in-place ({n} settori riscritti) — "
@@ -1079,6 +1141,14 @@ class H(BaseHTTPRequestHandler):
             return self._json({"err": "not found"}, 404)
         if self.path == "/api/levels":
             return self._json(tb_level.list_levels())
+        if self.path.startswith("/api/mission/"):
+            entry = self.path.split("/")[-1].split("?")[0]
+            if not (entry.isdigit() and 512 <= int(entry) < 560):
+                return self._json({"err": "unknown level"}, 404)
+            try:
+                return self._json(api_mission(int(entry) - 512))
+            except Exception as e:
+                return self._json({"err": str(e)}, 500)
         if self.path == "/api/catalogs":
             return self._json(tb_level.catalogs())
         if self.path.startswith("/api/level/"):
@@ -1150,6 +1220,8 @@ class H(BaseHTTPRequestHandler):
                 zcfg = body["edits"].pop("zoneCfg", None)
                 rec = body["edits"].pop("recipes", None)
                 tc = body["edits"].pop("teamCount", None)
+                rel = body["edits"].pop("relations", None)
+                mf = body["edits"].pop("missionFields", None)
                 res = apply_edits(body["entry"], body["edits"])
                 if zcfg is not None:
                     res["zoneCfg"] = apply_zonecfg(int(body["entry"]) - 512, zcfg)
@@ -1157,6 +1229,8 @@ class H(BaseHTTPRequestHandler):
                     res["recipes"] = apply_recipes(rec["set"], rec["pairs"])
                 if tc is not None:
                     res["teams"] = apply_teams(int(body["entry"]) - 512, tc)
+                if rel is not None or mf is not None:
+                    res["mission"] = apply_mission(int(body["entry"]) - 512, rel, mf)
                 # il PNG del terreno si rigenera da solo alla prossima richiesta
                 # (ground3d_png invalida sul mtime del PND moddato)
                 self._json(res)

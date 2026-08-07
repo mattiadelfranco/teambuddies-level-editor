@@ -16,6 +16,7 @@ export const api = {
   levels: () => j('/api/levels'),
   catalogs: () => j('/api/catalogs'),
   level: entry => j('/api/level/' + entry),
+  mission: entry => j('/api/mission/' + entry),
   models3d: entry => cached('/api/3d/' + entry),
   global3d: dat => cached('/api/global3d/' + dat),
   groundUrl: entry => '/ground3d/' + entry + '.png?v=' + Date.now(),

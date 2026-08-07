@@ -195,6 +195,23 @@
       <div id="lv-rrows"></div>
       <div class="hint">Col 1 = normal crate, col 2 = mega version. Sets are
         SHARED between the levels listed above.</div>
+      <h3>Alliances <span class="hint">(mission script)</span></h3>
+      <div id="lv-almx"></div>
+      <div class="hint">Row = how that team treats the column team: E = enemy,
+        A = ally, – = neutral. A team with no explicit relations defaults to
+        "enemy of everyone" (engine rule). T1 = you. Relations are one-way:
+        set both directions for a true alliance.</div>
+      <h3>Mission script <span id="lv-msinfo" class="hint"></span></h3>
+      <div id="lv-msrec"></div>
+      <div class="hint">Per-mission typed records, engine-verified. The
+        useful ones: <b>vita unità</b> = HP override for a unit type;
+        <b>trigger (win/lose)</b> and <b>bersaglio missione</b> = the win
+        conditions — their "condizione[k]" values index the mission's event
+        table, "squadra[k]" says who they apply to (n=-1 → everyone);
+        <b>crateri terreno</b> = baked scorch/deform marks at (x/2, z/2);
+        <b>override zona casse</b> retargets the crate zone nearest (x/2,
+        z/2); <b>spawner</b> drives reinforcements. Numbers are editable
+        (sizes locked); alliances have their own matrix above.</div>
     </section>
 
     <section id="tab-layers" class="tab">

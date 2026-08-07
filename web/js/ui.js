@@ -235,6 +235,7 @@ export function initUI(onViewMode) {
 
   store.onChange(what => {
     if (what === 'level') onLevel();
+    if (what === 'mission' || what === 'undo') renderMission();
     if (what === 'recipes' || what === 'level') renderRecipes();
     if (what === 'view' || what === 'layers' || what === 'level') syncViewControls();
     if (what === 'stamp' || what === 'atlas' || what === 'palette') drawPalette();
@@ -311,6 +312,69 @@ function onLevel() {
     .map(([nm, n]) => `<div class="leg"><span class="sw" style="background:${modelColor(nm)}"></span>${nm} ×${n}</div>`)
     .join('');
   renderRecipes();
+}
+
+// ---- mission script: alleanze + record ----
+function renderMission() {
+  const M = $('lv-almx'), R = $('lv-msrec');
+  if (!store.msn) {
+    M.innerHTML = '<div class="hint">loading mission script…</div>';
+    R.innerHTML = '';
+    $('lv-msinfo').textContent = '';
+    return;
+  }
+  const n = store.msn.teams;
+  const rel = store.ed.mrel || store.msn.relations;
+  const name = t => 'T' + (t + 1) + (t === 0 ? ' (you)' : '');
+  let h = '<table class="almx"><tr><th></th>'
+    + [...Array(n).keys()].map(u => `<th>${name(u)}</th>`).join('') + '</tr>';
+  for (let t = 0; t < n; t++) {
+    h += `<tr><th>${name(t)}</th>`;
+    for (let u = 0; u < n; u++) {
+      if (t === u) { h += '<td class="hint">·</td>'; continue; }
+      const r = rel[t] || { nemici: [], alleati: [] };
+      const v = r.nemici.includes(u) ? 'E' : r.alleati.includes(u) ? 'A' : 'N';
+      h += `<td><select data-t="${t}" data-u="${u}">`
+        + ['E', 'A', 'N'].map(k =>
+          `<option value="${k}"${k === v ? ' selected' : ''}>${k === 'N' ? '–' : k}</option>`).join('')
+        + '</select></td>';
+    }
+    h += '</tr>';
+  }
+  M.innerHTML = h + '</table>';
+  M.querySelectorAll('select').forEach(sel => sel.onchange = () => store.apply(s => {
+    if (!s.ed.mrel) s.ed.mrel = JSON.parse(JSON.stringify(store.msn.relations));
+    const t = +sel.dataset.t, u = +sel.dataset.u;
+    const r = s.ed.mrel[t] || (s.ed.mrel[t] = { nemici: [], alleati: [] });
+    r.nemici = r.nemici.filter(x => x !== u);
+    r.alleati = r.alleati.filter(x => x !== u);
+    if (sel.value === 'E') r.nemici.push(u);
+    if (sel.value === 'A') r.alleati.push(u);
+  }));
+
+  $('lv-msinfo').textContent = `— ${store.msn.records.length} records (DAT ${store.msn.entry})`;
+  const pend = new Map((store.ed.mfields || []).map(f => [f.rec + ':' + f.off, f.val]));
+  R.innerHTML = store.msn.records.map((r, i) => {
+    const flds = r.fields.map(f => {
+      const v = pend.has(i + ':' + f.off) ? pend.get(i + ':' + f.off) : f.val;
+      const dirty = pend.has(i + ':' + f.off) ? ' class="msdirty"' : '';
+      return `<label class="msf">${f.label}
+        <input type="number"${dirty} data-rec="${i}" data-off="${f.off}" value="${v}"
+          ${f.lock ? 'disabled title="list size: locked"' : ''}></label>`;
+    }).join('');
+    return `<details class="msrec"><summary>#${i} ${r.name}
+        <span class="hint">type ${r.type} · ${r.size}B</span></summary>
+      ${r.note ? `<div class="hint">${r.note}</div>` : ''}
+      <div class="msflds">${flds}</div></details>`;
+  }).join('');
+  R.querySelectorAll('input:not([disabled])').forEach(inp => inp.onchange = () => store.apply(s => {
+    const rec = +inp.dataset.rec, off = +inp.dataset.off;
+    const val = parseInt(inp.value, 10) || 0;
+    s.ed.mfields = (s.ed.mfields || []).filter(f => !(f.rec === rec && f.off === off));
+    const orig = store.msn.records[rec].fields.find(f => f.off === off);
+    if (!orig || orig.val !== val) s.ed.mfields.push({ rec, off, val });
+    inp.classList.add('msdirty');
+  }));
 }
 
 // ---- recipes ----
