@@ -97,7 +97,7 @@ against all 45 levels):
 |---|-----|------------|-------|-----------|
 | s0 | 0x00 | **team spawns + capture pads** | `u32 n` + n×8B `{x,z,w,h}` 8.8 | 45/45 (2–11) |
 | s1 | 0x04 | **random spawn candidates** — at level start each team draws `rand % n` (`FUN_800717a0`); 7 readers across ENG/GAME | `u32 n` + n×8B | 44/45 |
-| s2 | 0x08 | **hidden next-world weapons** (progression preview) | `u32 n` + n×8B | 20/45 |
+| s2 | 0x08 | **hidden weapon crates** — `{s16 x, s16 pad, s16 z, s16 which}` (the `pad` word is overwritten with the terrain height before use). See below | `u32 n` + n×8B | 20/45 |
 | s3 | 0x0c | **crate-launch zones** — delivery goes to the zone nearest the requester | `u32 n` + per zone `u32 m` + m×u16 half-tile indices | 41/45 |
 | s4 | 0x10 | **mission objective points** (`FUN_80072ed8`): marks the object found at each point with flag `0x10000` and counts it in `DAT_800be818`, or spawns resource `0x54` if the spot is empty. Only processed when `d8ce == 1` (mission 1, "That's Rubbish" — its 61 points are the litter) | `u32 n` + n×8B | 3/45 |
 | s5 | 0x14 | **unused** — empty in every level, no reader | — | 0/45 |
@@ -139,6 +139,49 @@ Waypoint record (s7 and s16), 12 bytes:
 
 Header note: the first u32 is **not** constant across levels (six distinct
 values: 744…2040); the second is a per-level value, different in all 45.
+
+### s2 — hidden weapon crates
+
+The reader is `FUN_80071650` (ENG, accessor arg 8), skipped entirely when
+`_DAT_8004d8da ∈ {1,2,3}`. For each record it takes the 4th halfword (`which`,
+0…9), looks it up in the byte table `DAT_800b57f4` = `[3, 4, 0, 1, 5, 7, 8, 12,
+10, 17]`, and uses the result as an index into the **resource slot table** at
+`0x8011a328` (slot 0 at that address; slots −2/−1 live just below at
+`0x8011a320`). Then `res = slots[slot]`: if `res->type == 1` it spawns directly
+through `func_0x800f23f4(res->id, &pos)` (gated by `_DAT_8004d8ca`), if
+`type == 3` it skips, otherwise it builds a 0xc0-byte crate object
+(`FUN_800734e0/73558/73640`).
+
+The slot table is filled from two independent places:
+
+| slots | filled by | contents |
+|-------|-----------|----------|
+| 0, 1, 2, 5, 6, 10 | `FUN_800ea2dc` (GAME), from `M_CRATECONTENTS.BIN` | recipes R1…R6, **normal** |
+| 7, 8, 9, 12, 13, 17 | same | recipes R1…R6, **MEGA** (`FUN_800ea46c` maps normal slot → mega slot) |
+| −2, −1 | same, hardcoded | SUGAR (62), AMMO (63) |
+| **3, 4** | **`FUN_800713b4` (ENG), from the mission's LEVELS.BIN record `+0x7c` / `+0x7e`** | two per-mission toy ids, `0xffff` = none |
+| 11, 14, 15, 16 | nobody | always null |
+
+So `which` resolves like this:
+
+| which | slot | weapon |
+|-------|------|--------|
+| 0 | 3 | LEVELS.BIN `+0x7c` (per mission) |
+| 1 | 4 | LEVELS.BIN `+0x7e` (per mission) |
+| 2 / 3 / 4 | 0 / 1 / 5 | recipe R1 / R2 / R4, normal |
+| 5 / 6 / 7 | 7 / 8 / 12 | recipe R1 / R2 / R4, MEGA |
+| 8 / 9 | 10 / 17 | recipe R6, normal / MEGA |
+
+Confirmed on the running game: with INFORAPOUND loaded (`_DAT_8004d8ce = 0x1a`)
+the live table held toy 49 in slot 0 — the R1 of *the mod's* set 26, not
+vanilla's 42 — and slots 3/4 held 61 (ARMAGEDDON BARREL) and 57 (4-PACK
+MISSILE), exactly the two u16 at `+0x7c`/`+0x7e` of mission 26's record.
+
+Campaign levels use `which = 0` or `1`, i.e. the two per-mission ids — that is
+what "hidden weapon" means in practice: **a level-specific weapon, usually one
+from a later world**. The multiplayer maps instead use `which = 3…7`
+(symmetric pairs), so they pull from the crate recipes and their `+0x7c`/`+0x7e`
+are `0xffff`.
 
 ---
 
@@ -345,6 +388,108 @@ Verified in game: 15=`STLION`, 22=`STPIG`, 32=`STSHEEP`.
 Types 30/35/44/49 take a special path in the spawner (added to a per-team
 objective list via `+0xa6` on the type struct). Preload is self-feeding from s6,
 so a placed unit brings its own resources (a placed lion spawns anywhere).
+
+#### Hard limit: 20 preload entries (a level with too many units won't load)
+
+The preload pass is `FUN_800e2bb8` (GAME). It builds the list of unit types to
+register in a **20-entry `u16` array on the stack** (`sp+16`, frame
+`addiu sp, sp, -80`, saved regs at `s0@56 s1@60 s2@64 s3@68 s4@72 ra@76`) and
+there is **no bounds check anywhere**. The list gets:
+
+* 1 fixed entry (type 1);
+* +1 type 0x22 when `_DAT_8004d8da == 1`, +1 type 0x32 when `iRam8004d8dc != 0`;
+* +3 (0x30/0x2e/0x2f) on mission 0x16, +1 (0x39) on mission 0xe;
+* +1 for every crate-recipe slot whose resource has class 3 (i.e. a recipe that
+  yields a *unit*), scanning slots 17→0;
+* **+1 per s6 record — not per distinct type.** Ten legionnaires cost ten
+  entries; `DAT_80119b00[type]` is indexed by type, so the duplicates just
+  overwrite each other and leak 0xc4 bytes each (`FUN_800e2ebc` →
+  `FUN_80074584(3, type)` is a lookup, not a load, so no model is duplicated).
+
+Consequences of overflowing, byte-exact:
+
+| entries | write lands on | effect |
+|---------|----------------|--------|
+| 21…30 | saved `s0`…`s4` (`sp+56`…`sp+75`) | the caller resumes with corrupted registers → bad access → freeze on a **black screen right after loading** |
+| 31+ | saved `ra` (`sp+76`) | `jr ra` jumps into garbage |
+
+Vanilla never gets close: the busiest level is INFORAPOUND with 13 records (2
+distinct types), then INFLAMMABLECANNIBALS with 10. **Keep the total s6 record
+count ≤ 16** and there is headroom for the system entries in every mission.
+
+The limit is liftable: patch E in `tools/tb_patch_eng.py` grows the frame to 168
+(`-80 → -168`, the 12 saved-register offsets shifted by +88) so the buffer at
+`sp+16` holds `PRELOAD_SLOTS = 64` entries. Nothing else depends on the count —
+`uRam8010e6c0` is written and never read, and `DAT_80119b00` is indexed by type
+(62 slots), not by entry. What still scales per record is the preload
+allocation `FUN_8003d44c(entries * 0xc4)`: 64 entries ≈ 12.5 KB against
+vanilla's ≈ 2.5 KB, and that allocator returns **0** when the arena is short,
+which would leave `DAT_80119b00[type]` pointing near address 0 — the next
+suspect if a level with very many units still fails to load.
+
+#### The REAL hard limit: the unit pools (9 buddy-class slots)
+
+The preload buffer was only the first ceiling. The engine keeps four
+fixed-capacity unit pools, initialised in GAME (`0x800e3400`) by
+`FUN_8007490c(desc, cap)` and allocated from with `FUN_800749c4` (a free-index
+list). Their entry arrays are **packed back-to-back in BSS with zero slack**:
+
+| pool | desc (GAME) | cap | array | stride | what |
+|------|-------------|-----|-------|--------|------|
+| 1 | 0x8010e6c4 | 16 | 0x801124ec | 0x3a4 | vehicles / big objects (`FUN_80070e48`) |
+| 2 | 0x8010e6dc | **9** | 0x80110524 | 0x388 | **buddies, humans, mechs** (`FUN_80071440`: types 7, 8, 10, 13, 18, 35, 46-48, 51-53, 56-57 + class 2/4) |
+| 3 | 0x8010e6f4 | 8 | 0x8010e724 | 0x3c0 | animals (types 15, 20, 55 + class 1) |
+| 4 | 0x8010e70c | 17 | 0x80115f2c | 0x10 | small per-unit records |
+
+**The bug (vanilla)**: when a pool is exhausted, `FUN_800749c4` returns the
+sentinel index **0x8000**; no caller checks it. The alloc helper then writes to
+`array + (-32768) * stride` — for pool 2 that is `0x80110524 - 0x1C40000 =
+0x7E4D0524`: a bus error, or (via the pointers derived from it) wild memory
+corruption → the black screen the 10th buddy-class s6 unit causes. Measured
+live: cap=9, count=10, cur=0x8000. Vanilla data never exceeds 8 same-class
+units (WHORA's 8 legionnaires), so the game never hits it.
+
+**The fix (patch F in `tools/tb_patch_eng.py`)**: the s6 spawner block in ENG
+(`FUN_8006f5e4`, 0x8006f8f0-0x8006fa1c) is rewritten to check pool 2
+(`count < 9`) and pool 1 (`count < 16`) before `FUN_80071440` and **skip the
+record** (reusing the existing skip path at 0x8006f8e4) when full: the level
+loads, the extra units simply don't spawn. The space for the guards comes from
+caching `team*228` in s7 (dead in the block — reassigned at 0x8006fa24 before
+any use) and absorbing the load-delay nops. Same window also caps the per-type
+spawn-point array at 8 (see above). NB the menus' 3D world scene and the
+attract demos run through this same spawner (MNU mirrors the pool layout), and
+the R3000 load-delay slot is real: an early version of this patch that used a
+loaded register in the next instruction corrupted every unit's team pointer.
+
+**Patch G (tb_patch_eng.py) lifts the pool to 24 slots** by relocating the
+array to `0x801E6114` — the top 0x5600 bytes of RAM made permanently
+allocator-free by shrinking the heap-arena size in its init (SYS `0x8003d41c`:
+the alignment `and` becomes `addiu size, size, -0x5600`; every mode's arena
+ended ≤ 0x801EB714, so every mode now ends ≤ the new base). Rebased refs: 3 in
+ENG, 7 lui/addiu pairs + 2 loop counts (8→23) + the walk bound (9·904→24·904)
++ the init cap in GAME. Crucially the entries also need **global IDs**:
+`FUN_800e3458` reserves a block of `16+8+9 = 33` ids (`FUN_80040a98(33)`) for
+pool1+pool3+pool2 — grown to `16+8+POOL2_CAP`; without this the extra entries
+get ids the allocator hands out again later (handle-table aliasing → circular
+lists). MNU/MPLR never touch the pools (zero references) so only ENG+GAME+SYS
+are involved.
+
+**Patch H fixes the root allocator**: `FUN_800749c4` (the generic fixed-cap
+free-list allocator used by pools, team rosters, everything) has NO exhaustion
+check in vanilla — on a full list it reads `free[count]` past its own carved
+array (the arena packs them back-to-back, so that's the neighbour list's data)
+and links garbage indices: circular lists, wild writes. Rewritten in-place
+(28 words) to return a clean `0xffff` when `count >= cap`. Callers that check
+-1 (e.g. the roster attach `FUN_80078d34`) now fail gracefully: a unit beyond
+the **6-per-team roster** still spawns, it just isn't registered as a team
+member (the 6-slot member array at team+0x38 is inline in the 0xe4-stride
+struct — growing it would need another relocation).
+
+Remaining practical limits with all patches applied: 24 pool slots for
+buddy/human/mech units (shared with runtime crate-spawned units), 6 roster
+members per team (extras spawn unregistered — spread units over two teams like
+vanilla WHORA's 4+4 to stay native), 8 spawn-points per type (9th+ of the same
+type spawn without a respawn slot).
 
 ### Static objects (PND extra list `type`)
 
